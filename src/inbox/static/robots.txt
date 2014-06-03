@@ -1,0 +1,4 @@
+# robots.txt for http://cloudbday.appspot.com/
+
+User-agent: *
+Disallow: /admin/ # This is the administration

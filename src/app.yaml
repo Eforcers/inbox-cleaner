@@ -1,0 +1,70 @@
+application: www-eicg
+version: 2014q2053-staging
+runtime: python27
+api_version: 1
+threadsafe: true
+
+default_expiration: "5d"
+
+builtins:
+- appstats: on
+- admin_redirect: on
+- remote_api: on
+
+libraries:
+- name: jinja2
+  version: "latest"
+- name: markupsafe
+  version: "latest"
+- name: lxml
+  version: "latest"
+
+inbound_services:
+- warmup
+
+error_handlers:
+  - file: inbox/templates/errors/default_error.html
+
+  - error_code: over_quota
+    file: inbox/templates/errors/over_quota.html
+
+  - error_code: dos_api_denial
+    file: inbox/templates/errors/dos.html
+
+  - error_code: timeout
+    file: inbox/templates/errors/timeout.html
+
+handlers:
+- url: /_ah/pipeline(/.*)?
+  script: run.handlers._APP
+
+- url: /_ah/queue/deferred
+  script: run.deferred_app
+  login: admin
+
+- url: /favicon.ico
+  static_files: inbox/static/img/favicon.ico
+  upload: inbox/static/img/favicon.ico
+
+- url: /robots.txt
+  static_files: inbox/static/robots.txt
+  upload: inbox/static/robots.txt
+
+- url: /gae_mini_profiler/static
+  static_dir: lib/gae_mini_profiler/static
+
+- url: /gae_mini_profiler/.*
+  script: lib.gae_mini_profiler.main.application
+
+- url: /static
+  static_dir: inbox/static
+  http_headers:
+    Access-Control-Allow-Origin: http://inboxcleaner.eforcers.com
+
+#TODO: Enable once landing is decent enough
+#- url: /
+#  static_files: inbox/static/html/index.html
+#  upload: inbox/static/html/index.html
+
+- url: .*
+  script: run.inbox.app

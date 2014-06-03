@@ -52,3 +52,12 @@ coverage.xml
 # Sphinx documentation
 docs/_build/
 
+#IDE files
+#PyCharm
+.idea/
+
+#Eclipse PyDev files
+.settings/
+
+# Don't store secret keys in version control
+secret_keys.py
