@@ -18,16 +18,11 @@ from google.appengine.ext import deferred
 from google.appengine.runtime.apiproxy_errors import CapabilityDisabledError
 from google.appengine.ext.db.metadata import get_namespaces
 
-from forms import BirthdayFileForm
 from helpers import OAuthDanceHelper, DirectoryHelper
-from models import get_birthdays, Client, User
 from flask import request, render_template, flash, url_for, redirect, abort, g
 from flask_cache import Cache
 from inbox import app, constants
-from decorators import login_required, admin_required
-from forms import ExampleForm
-from models import ExampleModel
-from tasks import send_birthday_message
+from decorators import login_required
 
 
 # Flask-Cache (configured to use App Engine Memcache API)
@@ -66,6 +61,11 @@ def warmup():
 
 @app.route('/')
 def index():
+    return 'Landing Page'
+
+
+@app.route('/admin')
+def admin_index():
     return redirect(url_for('list_process'))
 
 
@@ -107,10 +107,9 @@ def oauth_callback(self):
 
 
 @app.route('/process/', methods=['GET', 'POST'])
-@admin_required
+@login_required
 def list_process():
-    birthdays = User.get_all_birthdays()
-    return render_template('list_birthdays.html', birthdays=birthdays)
+    return render_template('list_process.html')
 
 
 ## Error handlers
