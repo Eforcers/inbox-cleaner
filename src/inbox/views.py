@@ -147,3 +147,12 @@ def server_error(e):
 def unauthorized(e):
     return render_template('403.html'), 403
 
+@app.route('/imaptest/')
+def list_messages():
+    from helpers import IMAPHelper
+    from secret_keys import TEST_LOGIN, TEST_PASS
+    imap = IMAPHelper()
+    imap.login(TEST_LOGIN, TEST_PASS)
+    print imap.list_messages()
+    return render_template('base.html')
+
