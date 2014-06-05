@@ -63,10 +63,10 @@ handlers:
   http_headers:
     Access-Control-Allow-Origin: http://inboxcleaner.eforcers.com
 
-#TODO: Enable once landing is decent enough
-#- url: /
-#  static_files: inbox/static/html/index.html
-#  upload: inbox/static/html/index.html
+#Landing is static
+- url: /
+  static_files: inbox/static/html/index.html
+  upload: inbox/static/html/index.html
 
 - url: .*
   script: run.inbox.app
