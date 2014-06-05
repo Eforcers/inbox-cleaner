@@ -109,7 +109,14 @@ def oauth_callback(self):
 @app.route('/process/', methods=['GET', 'POST'])
 @login_required
 def list_process():
-    return render_template('list_process.html')
+
+    if request.method == 'POST':
+        pass
+
+
+
+    return render_template('process.html')
+
 
 
 ## Error handlers

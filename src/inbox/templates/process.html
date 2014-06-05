@@ -1,3 +1,6 @@
+{% extends "list_process.html" %}
+
+{% block new_process_form %}
 <div class="modal hide fade" id="new-example-modal">
     <div class="modal-header">
         <button class="close" data-dismiss="modal">&times;</button>
@@ -5,7 +8,7 @@
     </div>
     <div class="modal-body">
         <form id="new-example-form" class="well form-horizontal"
-            action="{{ url_for('list_examples') }}" method="post" accept-charset="utf-8">
+            action="{{ url_for('list_process') }}" method="post" accept-charset="utf-8">
             <fieldset>
                 {{ form.hidden_tag() }}
                 <div class="control-group">
@@ -45,3 +48,4 @@
     </div>
 </div>
 
+{% endblock new_process_form %}
