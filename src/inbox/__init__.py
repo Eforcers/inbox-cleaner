@@ -39,6 +39,10 @@ app = Flask('inbox')
 env = get_environment()
 
 if env == constants.ENV_DEVELOPMENT:
+    # Monkey patch App Engine socket implementation
+    # Needed to get ssl connections working on localhost
+    import ssl_monkey_patch
+
     #development settings n
     app.config.from_object('inbox.settings.Development')
     # Flask-DebugToolbar (only enabled when DEBUG=True)

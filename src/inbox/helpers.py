@@ -76,8 +76,6 @@ class IMAPHelper:
     def login(self, email, password):
         logging.info("Connecting to IMAP server with user [%s]", email)
         result, data = self.mail_connection.login(email, password)
-        logging.info("logging result %s" % result)
-        logging.info("logging data %s" % data)
         return result, data
 
     def list_messages(self, criteria=''):
