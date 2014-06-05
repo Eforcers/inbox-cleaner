@@ -23,3 +23,7 @@ OAUTH2_SCOPES = 'https://www.googleapis.com/auth/userinfo.email '
 MENU_ITEMS = [
     ('admin_index', 'Home'),
 ]
+
+IMAP_SERVER = 'imap.gmail.com'
+IMAP_ALL_LABEL_ES = '[Gmail]/Todos'
+IMAP_ALL_LABEL_EN = '[Gmail]/All Mail'

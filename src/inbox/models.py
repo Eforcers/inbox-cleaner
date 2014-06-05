@@ -38,6 +38,7 @@ class CleanUserProcess(ndb.Model):
 
 
 class CleanMessageProcess(ndb.Model):
+    email_id = ndb.StringProperty()
     status = ndb.StringProperty()
 
 class CleanAttachmentProcess(ndb.Model):
