@@ -26,6 +26,8 @@ from decorators import login_required
 
 
 # Flask-Cache (configured to use App Engine Memcache API)
+from inbox.forms import CleanUserProcessForm
+
 cache = Cache(app)
 
 
@@ -109,9 +111,10 @@ def oauth_callback(self):
 @app.route('/process/', methods=['GET', 'POST'])
 @login_required
 def list_process():
-
+    form = CleanUserProcessForm()
     if request.method == 'POST':
-        pass
+        if form.validate_on_submit():
+            pass
 
 
 

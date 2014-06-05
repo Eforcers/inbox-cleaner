@@ -1,26 +1,32 @@
 {% extends "list_process.html" %}
 
 {% block new_process_form %}
-<div id="new-example-modal">
-    <div class="modal-body">
-        <form id="new-example-form" class="well form-horizontal"
-            action="{{ url_for('list_process') }}" method="post" accept-charset="utf-8">
-            <fieldset>
-                <div class="control-group">
-                    <div class="control-label"> prueba1</div>
-                    <div class="controls">
-                        <input />
-                    </div>
+<div id="new-process-div">
+    <h1 >New Process</h1>
+    <form id="new-process-form" role="form"
+        action="{{ url_for('list_process') }}" method="post" accept-charset="utf-8">
+            <div class="form-group">
+                <label for="input1" class="col-sm-2 control-label">
+                    Input1
+                </label>
+                <div class="col-sm-10">
+                    <input id="input1" name="input1"
+                       class="form-control" placeholder="input1" type="text" />
                 </div>
-                <div class="control-group">
-                    <div class="controls">
-                        <input class="btn btn-primary" type="submit" value="Add Example"/>
-                        <button class="btn" data-dismiss="modal">Cancel</button>
-                    </div>
+            </div>
+
+            <div class="form-group">
+                <div class="col-sm-offset-2 col-sm-10" style="margin-top: 10px;">
+                    <button class="btn btn-primary" type="submit">
+                        Add Example
+                    </button>
+                    <button class="btn"  type="reset" data-dismiss="modal">
+                        Clean
+                    </button>
                 </div>
-            </fieldset>
-        </form>
-    </div>
+            </div>
+
+    </form>
 </div>
 
 {% endblock new_process_form %}
