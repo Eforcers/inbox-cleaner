@@ -153,6 +153,7 @@ def move_process():
                         move_process_key.id())
                     move_process_pipeline.start()
                     move_process.pipeline_id = move_process_pipeline.pipeline_id
+                    move_process.put()
                     
                     pipeline_url = '/_ah/pipeline/status?root=%s' % move_process_pipeline.pipeline_id
                 else:
