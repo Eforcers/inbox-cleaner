@@ -145,9 +145,15 @@ class IMAPHelper:
         self.mail_connection.expunge()
         return result, data
 
-    def copy_message(self, msg_id=None, new_label=None):
+    def create_label(self, new_label=None):
+        # Attempt to create the destination label. If it already exists, nothing
+        # will happen.
         self.mail_connection.create(new_label)
-        result, data = self.mail_connection.uid('COPY', msg_id, new_label)
+
+    def copy_message(self, msg_id=None, destination_label=None):
+        # For any message that we find, we will copy it to the destination label.
+        # and remove the original label. IMAP does not have a move command.
+        result, data = self.mail_connection.uid('COPY', msg_id, destination_label)
         self.mail_connection.expunge()
         return result, data
 
