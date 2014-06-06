@@ -258,12 +258,12 @@ body {
     margin-top: 60px;
     -moz-border-radius: 7px;
     border-radius: 7px;
-    background-image: linear-gradient(bottom, rgb(222, 0, 148) 32%, rgb(196, 0, 108) 66%);
-    background-image: -o-linear-gradient(bottom, rgb(222, 0, 148) 32%, rgb(196, 0, 108) 66%);
-    background-image: -moz-linear-gradient(bottom, rgb(222, 0, 148) 32%, rgb(196, 0, 108) 66%);
-    background-image: -webkit-linear-gradient(bottom, rgb(222, 0, 148) 32%, rgb(196, 0, 108) 66%);
-    background-image: -ms-linear-gradient(bottom, rgb(222, 0, 148) 32%, rgb(196, 0, 108) 66%);
-    background-image: -webkit-gradient(linear, left bottom, left top, color-stop(0.32, rgb(222, 0, 148)), color-stop(0.66, rgb(196, 0, 108)));
+    background-image: linear-gradient(bottom, rgb(254, 235, 0) 32%, rgb(255, 215, 0) 66%);
+    background-image: -o-linear-gradient(bottom, rgb(254, 235, 0) 32%, rgb(255, 215, 0) 66%);
+    background-image: -moz-linear-gradient(bottom, rgb(254, 235, 0) 32%, rgb(255, 215, 0) 66%);
+    background-image: -webkit-linear-gradient(bottom, rgb(254, 235, 0) 32%, rgb(255, 215, 0) 66%);
+    background-image: -ms-linear-gradient(bottom, rgb(254, 235, 0) 32%, rgb(255, 215, 0) 66%);
+    background-image: -webkit-gradient(linear, left bottom, left top, color-stop(0.32, rgb(254, 235, 0)), color-stop(0.66, rgb(255, 215, 0)));
 }
 
 #welcome h1, font#welcome {
@@ -315,7 +315,7 @@ div#landlogin button {
     text-align: center;
     font-size: 35px;
     font-weight: 700;
-    color: #E7459F;
+    color: #FDEB07;
 }
 
 #pricecontent {
@@ -956,3 +956,4 @@ li.use {
     background: #666666;
 }
 #removing_tag{color: #808080; font-size: 30px; font-weight: 700;}
+
