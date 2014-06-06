@@ -29,6 +29,7 @@ from decorators import login_required
 # Flask-Cache (configured to use App Engine Memcache API)
 from inbox.forms import CleanUserProcessForm, MoveProssessForm
 from inbox.models import CleanUserProcess, MoveProcess
+from inbox.pipelines import  MoveProcessPipeline
 
 cache = Cache(app)
 
@@ -146,12 +147,18 @@ def move_process():
                 if len(emails) > 0:
                     move_process.emails = emails
                     move_process.tag = form.data['tag']
-                    move_process.put()
+                    move_process_key =  move_process.put()
                     #launch Pipeline
-                    pipeline_url = '/'
+                    move_process_pipeline = MoveProcessPipeline(
+                        move_process_key.id())
+                    move_process_pipeline.start()
+                    move_process.pipeline_id = move_process_pipeline.pipeline_id
+                    
+                    pipeline_url = '/_ah/pipeline/status?root=%s' % move_process_pipeline.pipeline_id
                 else:
                     form.errors['Emails'] = ['Emails should not be empty']
             except BadValueError, e:
+                logging.exception('error saving process')
                 form.errors['Emails'] = ['Emails are malformed']
 
 
