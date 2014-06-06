@@ -30,3 +30,5 @@ IMAP_ALL_LABEL_ES = '[Gmail]/Todos'
 IMAP_ALL_LABEL_EN = '[Gmail]/All Mail'
 IMAP_TRASH_LABEL_EN = '[Gmail]/Trash'
 IMAP_TRASH_LABEL_ES = '[Gmail]/Papelera'
+
+MESSAGE_BATCH_SIZE = 20

@@ -130,7 +130,6 @@ class IMAPHelper:
 
             result, data = self.mail_connection.uid('search', None,
                                                     r'(X-GM-RAW "%s")' % query)
-            print result, data, query
 
             msg_ids = []
             if result == 'OK':
