@@ -25,5 +25,18 @@ MENU_ITEMS = [
 ]
 
 IMAP_SERVER = 'imap.gmail.com'
+IMAP_PORT = 993
 IMAP_ALL_LABEL_ES = '[Gmail]/Todos'
 IMAP_ALL_LABEL_EN = '[Gmail]/All Mail'
+IMAP_TRASH_LABEL_EN = '[Gmail]/Trash'
+IMAP_TRASH_LABEL_ES = '[Gmail]/Papelera'
+
+STARTED = 'STARTED'
+FINISHED = 'FINISHED'
+FAILED = 'FAILED'
+
+STATUS_CHOICES = [
+    STARTED,
+    FINISHED,
+    FAILED
+]

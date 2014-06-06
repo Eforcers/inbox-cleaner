@@ -9,32 +9,33 @@
 {% block content %}
     {% block new_process_form %}
     {% endblock new_process_form %}
+    <div class="row">
+        <h1 id="">inboxs</h1>
+        <div>&nbsp;</div>
+        <table class="table table-bordered table-striped">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Birthday</th>
+                    <th>&nbsp;</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for birthday in birthdays %}
+                {% set birthday_id = birthday.key.id() %}
+                <tr>
 
-    <h1 id="">inboxs</h1>
-    <div>&nbsp;</div>
-    <table class="table table-bordered table-striped">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Birthday</th>
-                <th>&nbsp;</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for birthday in birthdays %}
-            {% set birthday_id = birthday.key.id() %}
-            <tr>
-
-                <td>{{ birthday.display_name }}</td>
-                <td class="nowrap">{{ birthday.timestamp.strftime('%b %d, %Y %I:%M %p') }}</td>
-                <td>
-                    <a href="{{ url_for('edit_birthday', birthday_id=birthday_id) }}" class="btn">Edit</a>
-                </td>
-            </tr>
-            {% else %}
-            <tr><td colspan="7">No birthdays yet</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
+                    <td>{{ birthday.display_name }}</td>
+                    <td class="nowrap">{{ birthday.timestamp.strftime('%b %d, %Y %I:%M %p') }}</td>
+                    <td>
+                        <a href="{{ url_for('edit_birthday', birthday_id=birthday_id) }}" class="btn">Edit</a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7">No birthdays yet</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 
 {% endblock content %}

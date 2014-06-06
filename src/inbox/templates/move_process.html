@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div id="new-process-div" class="row">
+    <h1 >Move Process</h1>
+    {% if form.errors %}
+        {% for key, value in form.errors.iteritems() %}
+        <div class="alert alert-danger">
+            <a href="#" class="close" data-dismiss="alert">&times;</a>
+            {{ key }} : {{value[0]}}
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    {% if pipeline_url %}
+     <div class="alert alert-success">
+        <a href="#" class="close" data-dismiss="alert">&times;</a>
+        Move Proccess saved successfully for more information
+         <strong><a href="{{pipeline_url}}">click here</a></strong>
+     </div>
+    {% endif %}
+
+
+    <form id="new-process-form" role="form"
+        action="{{ url_for('move_process') }}" method="post"
+        accept-charset="utf-8">
+            {{ form.hidden_tag() }}
+            <div class="form-group">
+                <label for="emails" class="col-sm-2 control-label">
+                    Emails List
+                </label>
+                <div class="col-sm-10">
+                    <textarea name="emails" required id="emails"
+                              placeholder="Emails list  separated by break lines"
+                              class="form-control"></textarea>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="tag" class="col-sm-2 control-label">
+                    Tag
+                </label>
+                <div class="col-sm-10">
+                    <input id="tag" name="tag"
+                           class="form-control"
+                           placeholder="Tag to be put on the restored emails"
+                           type="text" required/>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-offset-2 col-sm-10" style="margin-top: 10px;">
+                    <button class="btn btn-primary" type="submit">
+                        Start move process
+                    </button>
+                    <button class="btn"  type="reset" data-dismiss="modal">
+                        Clean
+                    </button>
+                </div>
+            </div>
+
+    </form>
+</div>
+
+
+{% endblock content %}

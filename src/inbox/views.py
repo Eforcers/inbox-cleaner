@@ -13,7 +13,8 @@ from csv import DictReader
 import logging
 from datetime import datetime
 
-from google.appengine.api import users, namespace_manager, memcache
+from google.appengine.api import users
+from google.appengine.api.datastore_errors import BadValueError
 from google.appengine.ext import deferred
 from google.appengine.runtime.apiproxy_errors import CapabilityDisabledError
 from google.appengine.ext.db.metadata import get_namespaces
@@ -26,7 +27,9 @@ from decorators import login_required
 
 
 # Flask-Cache (configured to use App Engine Memcache API)
-from inbox.forms import CleanUserProcessForm
+from inbox.forms import CleanUserProcessForm, MoveProssessForm
+from inbox.models import CleanUserProcess, MoveProcess
+from inbox.pipelines import  MoveProcessPipeline
 
 cache = Cache(app)
 
@@ -108,18 +111,60 @@ def oauth_callback(self):
     return redirect(url_for('settings'))
 
 
-@app.route('/process/', methods=['GET', 'POST'])
+@app.route('/process/', methods=['GET','POST'])
 @login_required
 def list_process():
     form = CleanUserProcessForm()
+    user = users.get_current_user()
+    clean_process_saved = False
     if request.method == 'POST':
         if form.validate_on_submit():
-            pass
+            clean_user_process = CleanUserProcess(owner_email=user.email(),
+                                                  destination_message_email=user.email())
+            for key, value in form.data.iteritems():
+                setattr(clean_user_process,key,value)
+            clean_user_process.put()
+            clean_process_saved = True
+            #launch Pipeline
+
+    return render_template('process.html',form=form, user=user.email(),
+                           clean_process_saved=clean_process_saved)
 
 
+@app.route('/process/move', methods=['GET', 'POST'])
+@login_required
+def move_process():
+    form = MoveProssessForm()
+    user = users.get_current_user()
+    pipeline_url = ''
+    if request.method == 'POST':
+        if form.validate_on_submit():
+            try:
+                move_process = MoveProcess()
+                emails = list(set([
+                    email.strip() for email in form.data['emails']
+                        .splitlines()]))
+                if len(emails) > 0:
+                    move_process.emails = emails
+                    move_process.tag = form.data['tag']
+                    move_process_key =  move_process.put()
+                    #launch Pipeline
+                    move_process_pipeline = MoveProcessPipeline(
+                        move_process_key.id())
+                    move_process_pipeline.start()
+                    move_process.pipeline_id = move_process_pipeline.pipeline_id
+                    move_process.put()
+                    
+                    pipeline_url = '/_ah/pipeline/status?root=%s' % move_process_pipeline.pipeline_id
+                else:
+                    form.errors['Emails'] = ['Emails should not be empty']
+            except BadValueError, e:
+                logging.exception('error saving process')
+                form.errors['Emails'] = ['Emails are malformed']
 
-    return render_template('process.html')
 
+    return render_template('move_process.html', form=form, user=user.email(),
+                           pipeline_url=pipeline_url)
 
 
 ## Error handlers
@@ -147,3 +192,16 @@ def list_messages():
     print imap.list_messages()
     return render_template('base.html')
 
+@app.route('/imapmovetest/')
+def move_message():
+    from helpers import IMAPHelper
+    imap = IMAPHelper()
+    imap.oauth1_2lo_login('administrador@eforcers.com.co')
+    result, messages = imap.list_messages(only_from_trash=True)
+    print messages
+    imap.create_label('prueba 2')
+    if len(messages) > 0:
+        for i, m in enumerate(messages):
+            imap.copy_message(msg_id=messages[i], new_label='prueba 2')
+    imap.close()
+    return render_template('base.html')

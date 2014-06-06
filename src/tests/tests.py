@@ -5,8 +5,10 @@ tests.py
 """
 import unittest
 import base64
+import argparse
 
 from google.appengine.ext import testbed, deferred, ndb
+
 from inbox import app
 
 USAGE = """

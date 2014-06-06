@@ -22,27 +22,58 @@ def validate_email(prop, value):
     return value.lower()
 
 
+class User(ndb.Model):
+    email = ndb.StringProperty(required=True, validator=validate_email)
+    # OAuth credentials and token for the domain domain
+    credentials = ndb.TextProperty(indexed=False)
+    refresh_token = ndb.StringProperty(indexed=False)
+
+
 class CleanUserProcess(ndb.Model):
-    name = ndb.StringProperty(required=True)
+    process_name = ndb.StringProperty(required=True)
     #Authenticated account, owner of the process
     owner_email = ndb.StringProperty(required=True, validator=validate_email)
     #IMAP credentials
     source_email = ndb.StringProperty(required=True, validator=validate_email, indexed=False)
-    source_password = ndb.StringProperty(required=True,
-                                         validator=validate_email, indexed=False)
+    source_password = ndb.StringProperty(required=True, indexed=False)
     destination_message_email = ndb.StringProperty(required=True,
                                                    validator=validate_email, indexed=False)
     search_criteria = ndb.StringProperty(required=True)
-    # OAuth credentials and token for the domain domain
-    credentials = ndb.TextProperty(indexed=False)
-    refresh_token = ndb.StringProperty(indexed=False)
+    pipeline_id = ndb.IntegerProperty(indexed=False)
     status = ndb.StringProperty()
-
 
 
 class CleanMessageProcess(ndb.Model):
-    email_id = ndb.StringProperty()
+    email = ndb.StringProperty()
     status = ndb.StringProperty()
+
 
 class CleanAttachmentProcess(ndb.Model):
     status = ndb.StringProperty()
+
+
+class MoveProcess(ndb.Model):
+    emails = ndb.StringProperty(indexed=False, repeated=True,
+                                validator=validate_email)
+    tag = ndb.StringProperty(indexed=False, required=True)
+    pipeline_id = ndb.IntegerProperty(indexed=False)
+    status = ndb.StringProperty(indexed=False,
+                                choices=constants.STATUS_CHOICES, default=constants.STARTED)
+    execution_start = ndb.DateTimeProperty(auto_now_add=True, indexed=False)
+    execution_finish = ndb.DateTimeProperty(indexed=False)
+
+
+class MoveUserProcess(ndb.Model):
+    user_email = ndb.StringProperty(indexed=False, required=True, validator=validate_email)
+    move_process_key = ndb.KeyProperty(MoveProcess, indexed=False)
+    status = ndb.StringProperty(indexed=False,
+                                choices=constants.STATUS_CHOICES, default=constants.STARTED)
+
+
+class MoveMessageProcess(ndb.Model):
+    email = ndb.StringProperty(indexed=False, required=True, validator=validate_email)
+    message_id = ndb.StringProperty(indexed=False, required=True)
+    user_process_key = ndb.KeyProperty(MoveUserProcess, indexed=False)
+    status = ndb.StringProperty(indexed=False,
+                                choices=constants.STATUS_CHOICES, default=constants.STARTED)
+    error_description = ndb.StringProperty(indexed=False, required=True)
