@@ -5,9 +5,9 @@
 import imaplib
 import logging
 
-from util import OAuthEntity, GenerateXOauthString
-
 import httplib2
+
+from util import OAuthEntity, GenerateXOauthString
 from apiclient.discovery import build
 from oauth2client.client import Credentials, OAuth2WebServerFlow
 from inbox import app
@@ -104,23 +104,9 @@ class IMAPHelper:
 
     def list_messages(self, criteria='', only_with_attachments=False,
                       only_from_trash=False):
-        if only_from_trash:
-            en_label = constants.IMAP_TRASH_LABEL_EN
-            es_label = constants.IMAP_TRASH_LABEL_ES
-        else:
-            en_label = constants.IMAP_ALL_LABEL_EN
-            es_label = constants.IMAP_ALL_LABEL_ES
-        try:
-            result, data = self.mail_connection.select(es_label)
-            # Try in english if not found in spanish
-            if result != 'OK':
-                result, data = self.mail_connection.select(en_label)
-                if result != 'OK':
-                    # Maybe configured in another language or label name is wrong
-                    logging.error("Unable to get count for all label. %s [%s]",
-                                  result, data)
-                    return result, data
 
+        try:
+            self.select(only_from_trash=only_from_trash)
             query = ' '
             if only_with_attachments:
                 query += 'has:attachment %s ' % criteria
@@ -135,10 +121,10 @@ class IMAPHelper:
             if result == 'OK':
                 msg_ids = data[0].split()
 
-            return 'OK', msg_ids
+            return msg_ids
         except:
             logging.exception("Unable to select mailbox")
-            return 'NO', None
+            return []
 
     def get_message(self, msg_id):
         result, data = self.mail_connection.uid('fetch', msg_id, '(RFC822)')
@@ -150,10 +136,31 @@ class IMAPHelper:
         # will happen.
         self.mail_connection.create(new_label)
 
-    def copy_message(self, msg_id=None, destination_label=None):
+    def select(self, only_from_trash=False):
+        if only_from_trash:
+            en_label = constants.IMAP_TRASH_LABEL_EN
+            es_label = constants.IMAP_TRASH_LABEL_ES
+        else:
+            en_label = constants.IMAP_ALL_LABEL_EN
+            es_label = constants.IMAP_ALL_LABEL_ES
+        result, data = self.mail_connection.select(es_label)
+        # Try in english if not found in spanish
+        if result != 'OK':
+            result, data = self.mail_connection.select(en_label)
+            if result != 'OK':
+                # Maybe configured in another language or label name is wrong
+                logging.error("Unable to get count for all label. %s [%s]",
+                              result, data)
+                return None, None
+        return result, data
+
+
+    def copy_message(self, msg_id=None, destination_label=None, only_from_trash=False):
         # For any message that we find, we will copy it to the destination label.
         # and remove the original label. IMAP does not have a move command.
-        result, data = self.mail_connection.uid('COPY', msg_id, destination_label)
+        self.select(only_from_trash=only_from_trash)
+        result, data = self.mail_connection.uid('COPY', msg_id,
+                                                destination_label)
         self.mail_connection.expunge()
         return result, data
 
@@ -170,16 +177,6 @@ class IMAPHelper:
             result, data = self.mail_connection.expunge()
         else:
             self.mail_connection.expunge()
-        return result, data
-
-    def move_message(self, msg_id=None, prev_label=None, new_label=None):
-        # When the original label is trash, you only need to copy the message
-        result, data = self.copy_message(msg_id=msg_id, new_label=new_label)
-        if result == 'OK':
-            result, data = self.remove_message_label(
-                msg_id=msg_id, prev_label=prev_label)
-            if result == 'OK':
-                result, data = self.delete_message(msg_id=msg_id)
         return result, data
 
     def add_message_labels(self, msg_id=None, new_labels=None):

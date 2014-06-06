@@ -56,7 +56,7 @@ class MoveProcess(ndb.Model):
     emails = ndb.StringProperty(indexed=False, repeated=True,
                                 validator=validate_email)
     tag = ndb.StringProperty(indexed=False, required=True)
-    pipeline_id = ndb.IntegerProperty(indexed=False)
+    pipeline_id = ndb.StringProperty(indexed=False)
     status = ndb.StringProperty(indexed=False,
                                 choices=constants.STATUS_CHOICES, default=constants.STARTED)
     execution_start = ndb.DateTimeProperty(auto_now_add=True, indexed=False)
@@ -76,4 +76,4 @@ class MoveMessageProcess(ndb.Model):
     user_process_key = ndb.KeyProperty(MoveUserProcess, indexed=False)
     status = ndb.StringProperty(indexed=False,
                                 choices=constants.STATUS_CHOICES, default=constants.STARTED)
-    error_description = ndb.StringProperty(indexed=False, required=True)
+    error_description = ndb.StringProperty(indexed=False)
