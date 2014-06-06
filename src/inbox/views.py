@@ -156,3 +156,15 @@ def list_messages():
     print imap.list_messages()
     return render_template('base.html')
 
+@app.route('/imapmovetest/')
+def move_message():
+    from helpers import IMAPHelper
+    from secret_keys import TEST_LOGIN, TEST_PASS
+    imap = IMAPHelper()
+    imap.login(TEST_LOGIN, TEST_PASS)
+    result, messages = imap.list_messages(only_from_trash=True)
+    print messages
+    if len(messages) > 0:
+        for i, m in enumerate(messages):
+            imap.copy_message(msg_id=messages[i], new_label='prueba 2')
+    return render_template('base.html')
