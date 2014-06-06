@@ -20,3 +20,8 @@ CleanUserProcessForm = model_form(CleanUserProcess, wtf.Form,field_args={
     'search_criteria': dict(validators=[validators.Required()]),
 },exclude=['destination_message_email','owner_email',
            'credentials','refresh_token','status'] )
+
+
+class MoveProssessForm(wtf.Form):
+    emails = wtf.TextAreaField('emails', validators=[validators.Required()])
+    tag = wtf.TextField('tag', validators=[validators.Required()])

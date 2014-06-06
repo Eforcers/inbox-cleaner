@@ -14,6 +14,7 @@ import logging
 from datetime import datetime
 
 from google.appengine.api import users
+from google.appengine.api.datastore_errors import BadValueError
 from google.appengine.ext import deferred
 from google.appengine.runtime.apiproxy_errors import CapabilityDisabledError
 from google.appengine.ext.db.metadata import get_namespaces
@@ -26,8 +27,8 @@ from decorators import login_required
 
 
 # Flask-Cache (configured to use App Engine Memcache API)
-from inbox.forms import CleanUserProcessForm
-from inbox.models import CleanUserProcess
+from inbox.forms import CleanUserProcessForm, MoveProssessForm
+from inbox.models import CleanUserProcess, MoveProcess
 
 cache = Cache(app)
 
@@ -127,6 +128,35 @@ def list_process():
 
     return render_template('process.html',form=form, user=user.email(),
                            clean_process_saved=clean_process_saved)
+
+
+@app.route('/process/move', methods=['GET', 'POST'])
+@login_required
+def move_process():
+    form = MoveProssessForm()
+    user = users.get_current_user()
+    pipeline_url = ''
+    if request.method == 'POST':
+        if form.validate_on_submit():
+            try:
+                move_process = MoveProcess()
+                emails = list(set([
+                    email.strip() for email in form.data['emails']
+                        .splitlines()]))
+                if len(emails) > 0:
+                    move_process.emails = emails
+                    move_process.tag = form.data['tag']
+                    move_process.put()
+                    #launch Pipeline
+                    pipeline_url = '/'
+                else:
+                    form.errors['Emails'] = ['Emails should not be empty']
+            except BadValueError, e:
+                form.errors['Emails'] = ['Emails are malformed']
+
+
+    return render_template('move_process.html', form=form, user=user.email(),
+                           pipeline_url=pipeline_url)
 
 
 

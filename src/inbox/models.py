@@ -44,3 +44,9 @@ class CleanMessageProcess(ndb.Model):
 
 class CleanAttachmentProcess(ndb.Model):
     status = ndb.StringProperty()
+
+class MoveProcess(ndb.Model):
+    emails = ndb.StringProperty(indexed=False, repeated=True,
+                                validator=validate_email)
+    tag = ndb.StringProperty(indexed=False)
+    pipeline_id = ndb.IntegerProperty(indexed=False)
