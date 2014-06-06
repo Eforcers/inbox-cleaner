@@ -94,19 +94,38 @@ class IMAPHelper:
         result, data = self.mail_connection.login(email, password)
         return result, data
 
-    def list_messages(self, criteria=''):
+    def auth(self, xoauth2_string):
         try:
-            result, data = self.mail_connection.select(constants.IMAP_ALL_LABEL_ES)
+            self.mail_connection.authenticate('XOAUTH2', lambda x: xoauth2_string)
+        except Exception as e:
+            logging.error("Error Authenticating Imap with the OAuth string. %s" % e)
+
+    def list_messages(self, criteria='', only_with_attachments=False, only_from_trash=False):
+        if only_from_trash:
+            en_label = constants.IMAP_TRASH_LABEL_EN
+            es_label = constants.IMAP_TRASH_LABEL_ES
+        else:
+            en_label = constants.IMAP_ALL_LABEL_EN
+            es_label = constants.IMAP_ALL_LABEL_ES
+        try:
+            result, data = self.mail_connection.select(es_label)
             #Try in english if not found in spanish
             if result != 'OK':
-                result, data = self.mail_connection.select(constants.IMAP_ALL_LABEL_EN)
+                result, data = self.mail_connection.select(en_label)
                 if result != 'OK':
                     #Maybe configured in another language or label name is wrong
                     logging.error("Unable to get count for all label. %s [%s]", result, data)
-                    return 'NO', None
+                    return result, data
 
-            query = 'has:attachment %s' % criteria
+            query = ' '
+            if only_with_attachments:
+                query += 'has:attachment %s ' % criteria
+
+            if only_from_trash:
+                query += 'in:trash '
+
             result, data = self.mail_connection.uid('search', None, r'(X-GM-RAW "%s")' % query)
+            print result, data, query
 
             msg_ids = []
             if result == 'OK':
@@ -133,3 +152,36 @@ class IMAPHelper:
 
 
 
+    def copy_message(self, msg_id=None, new_label=None):
+        self.mail_connection.create(new_label)
+        result, data = self.mail_connection.uid('COPY', msg_id, new_label)
+        return result, data
+
+    def remove_message_label(self, msg_id=None, prev_label=None):
+        result, data = self.mail_connection.uid('STORE', msg_id, '-X-GM-LABELS', prev_label)
+        return result, data
+
+    def delete_message(self, msg_id=None):
+        result, data = self.mail_connection.uid('STORE', msg_id, '+FLAGS', '\\Deleted')
+        if result == 'OK':
+            result, data = self.mail_connection.expunge()
+        return result, data
+
+    def move_message(self, msg_id=None, prev_label=None, new_label=None):
+        # When the original label is trash, you only need to copy the message
+        result, data = self.copy_message(msg_id=msg_id, new_label=new_label)
+        if result == 'OK':
+            result, data = self.remove_message_label(
+                msg_id=msg_id, prev_label=prev_label)
+            if result == 'OK':
+                result, data = self.delete_message(msg_id=msg_id)
+        return result, data
+
+    def add_message_labels(self, msg_id=None, new_labels=None):
+        labels_string = '"'+'" "'.join(new_labels)+'"'
+        result, data = self.mail_connection.uid('STORE', msg_id, '+X-GM-LABELS', labels_string)
+        return result, data
+
+    def get_message_labels(self, msg_id=None):
+        result, data = self.mail_connection.uid('FETCH', msg_id, 'X-GM-LABELS')
+        return result, data
