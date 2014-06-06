@@ -109,7 +109,6 @@ class IMAPHelper:
                 query += 'in:trash '
 
             result, data = self.mail_connection.uid('search', None, r'(X-GM-RAW "%s")' % query)
-            print result, data, query
 
             msg_ids = []
             if result == 'OK':
@@ -134,6 +133,13 @@ class IMAPHelper:
         return result, data
 
     def delete_message(self, msg_id=None):
+        en_label = constants.IMAP_TRASH_LABEL_EN
+        es_label = constants.IMAP_TRASH_LABEL_ES
+        result, data = self.mail_connection.uid('COPY', msg_id, es_label)
+        self.mail_connection.expunge()
+        if result != 'OK':
+            result, data = self.mail_connection.uid('COPY', msg_id, en_label)
+
         result, data = self.mail_connection.uid('STORE', msg_id, '+FLAGS', '\\Deleted')
         if result == 'OK':
             result, data = self.mail_connection.expunge()
