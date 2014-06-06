@@ -23,22 +23,20 @@ def validate_email(prop, value):
 
 
 class CleanUserProcess(ndb.Model):
-    name = ndb.StringProperty(required=True)
+    process_name = ndb.StringProperty(required=True)
     #Authenticated account, owner of the process
     owner_email = ndb.StringProperty(required=True, validator=validate_email)
     #IMAP credentials
     source_email = ndb.StringProperty(required=True, validator=validate_email, indexed=False)
-    source_password = ndb.StringProperty(required=True,
-                                         validator=validate_email, indexed=False)
+    source_password = ndb.StringProperty(required=True, indexed=False)
     destination_message_email = ndb.StringProperty(required=True,
                                                    validator=validate_email, indexed=False)
     search_criteria = ndb.StringProperty(required=True)
+    pipeline_id = ndb.IntegerProperty(indexed=False)
     # OAuth credentials and token for the domain domain
     credentials = ndb.TextProperty(indexed=False)
     refresh_token = ndb.StringProperty(indexed=False)
     status = ndb.StringProperty()
-
-
 
 class CleanMessageProcess(ndb.Model):
     email_id = ndb.StringProperty()

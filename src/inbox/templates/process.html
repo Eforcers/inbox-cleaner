@@ -1,24 +1,87 @@
 {% extends "list_process.html" %}
 
 {% block new_process_form %}
-<div id="new-process-div">
+<div id="new-process-div" class="row">
     <h1 >New Process</h1>
+    {% if form.errors %}
+        {% for key, value in form.errors.iteritems() %}
+        <div class="alert alert-danger">
+            <a href="#" class="close" data-dismiss="alert">&times;</a>
+            {{ key }} : {{value[0]}}
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    {% if clean_process_saved %}
+     <div class="alert alert-success">
+        <a href="#" class="close" data-dismiss="alert">&times;</a>
+        Proccess save successfully
+     </div>
+    {% endif %}
+
+
     <form id="new-process-form" role="form"
-        action="{{ url_for('list_process') }}" method="post" accept-charset="utf-8">
+        action="{{ url_for('list_process') }}" method="post"
+        accept-charset="utf-8">
+            {{ form.hidden_tag() }}
             <div class="form-group">
-                <label for="input1" class="col-sm-2 control-label">
-                    Input1
+                <label for="process_name" class="col-sm-2 control-label">
+                    Process Name
                 </label>
                 <div class="col-sm-10">
-                    <input id="input1" name="input1"
-                       class="form-control" placeholder="input1" type="text" />
+                    <input id="process_name" name="process_name"
+                       class="form-control" placeholder="Process Name"
+                       type="text" required/>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="source_email" class="col-sm-2 control-label">
+                    Source Email
+                </label>
+                <div class="col-sm-10">
+                    <input id="source_email" name="source_email"
+                       class="form-control" placeholder="Process Name"
+                       type="email" required/>
                 </div>
             </div>
 
             <div class="form-group">
+                <label for="source_password" class="col-sm-2 control-label">
+                    Source Password
+                </label>
+                <div class="col-sm-10">
+                    <input id="source_password" name="source_password"
+                       class="form-control" placeholder="Process Name"
+                       type="password" required/>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="search_criteria" class="col-sm-2 control-label">
+                    Search Criteria
+                </label>
+                <div class="col-sm-10">
+                    <input id="search_criteria" name="search_criteria"
+                       class="form-control" placeholder="Process Name"
+                       type="text" required/>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="col-sm-2 control-label">
+                    Owner Email
+                </label>
+                <div class="col-sm-10">
+                    {{user}}
+                </div>
+            </div>
+
+
+
+            <div class="form-group">
                 <div class="col-sm-offset-2 col-sm-10" style="margin-top: 10px;">
                     <button class="btn btn-primary" type="submit">
-                        Add Example
+                        Add Process
                     </button>
                     <button class="btn"  type="reset" data-dismiss="modal">
                         Clean

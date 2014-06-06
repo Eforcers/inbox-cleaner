@@ -14,7 +14,9 @@ from wtforms.ext.appengine.ndb import model_form
 from models import CleanUserProcess
 
 CleanUserProcessForm = model_form(CleanUserProcess, wtf.Form,field_args={
+    'name':dict(validators=[validators.Required()]),
     'source_email': dict(validators=[validators.Required(),validators.Email()]),
     'source_password': dict(validators=[validators.Required()]),
-    'destination_message_email': dict(validators=[validators.Required(),validators.Email()]),
-})
+    'search_criteria': dict(validators=[validators.Required()]),
+},exclude=['destination_message_email','owner_email',
+           'credentials','refresh_token','status'] )

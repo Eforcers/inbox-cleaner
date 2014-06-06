@@ -13,7 +13,7 @@ from csv import DictReader
 import logging
 from datetime import datetime
 
-from google.appengine.api import users, namespace_manager, memcache
+from google.appengine.api import users
 from google.appengine.ext import deferred
 from google.appengine.runtime.apiproxy_errors import CapabilityDisabledError
 from google.appengine.ext.db.metadata import get_namespaces
@@ -27,6 +27,7 @@ from decorators import login_required
 
 # Flask-Cache (configured to use App Engine Memcache API)
 from inbox.forms import CleanUserProcessForm
+from inbox.models import CleanUserProcess
 
 cache = Cache(app)
 
@@ -108,17 +109,25 @@ def oauth_callback(self):
     return redirect(url_for('settings'))
 
 
-@app.route('/process/', methods=['GET', 'POST'])
+@app.route('/process/', methods=['GET','POST'])
 @login_required
 def list_process():
     form = CleanUserProcessForm()
+    user = users.get_current_user()
+    clean_process_saved = False
     if request.method == 'POST':
         if form.validate_on_submit():
-            pass
+            clean_user_process = CleanUserProcess(owner_email=user.email(),
+                                                  destination_message_email=user.email())
+            for key, value in form.data.iteritems():
+                setattr(clean_user_process,key,value)
+            clean_user_process.put()
+            clean_process_saved = True
+            #launch Pipeline
 
+    return render_template('process.html',form=form, user=user.email(),
+                           clean_process_saved=clean_process_saved)
 
-
-    return render_template('process.html')
 
 
 

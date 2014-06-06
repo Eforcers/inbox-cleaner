@@ -21,7 +21,7 @@ def namespace_manager_default_namespace_for_request():
     from inbox import constants, get_environment
     environment = get_environment()
     namespace = 'staging-%s' % domain if environment == constants.ENV_STAGING \
-        else domain
+        else ''
     return namespace
 
 
