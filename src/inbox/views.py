@@ -159,8 +159,6 @@ def move_process():
                            pipeline_url=pipeline_url)
 
 
-
-
 ## Error handlers
 # Handle 404 errors
 @app.errorhandler(404)
@@ -189,12 +187,13 @@ def list_messages():
 @app.route('/imapmovetest/')
 def move_message():
     from helpers import IMAPHelper
-    from secret_keys import TEST_LOGIN, TEST_PASS
     imap = IMAPHelper()
-    imap.login(TEST_LOGIN, TEST_PASS)
+    imap.oauth1_2lo_login('administrador@eforcers.com.co')
     result, messages = imap.list_messages(only_from_trash=True)
     print messages
+    imap.create_label('prueba 2')
     if len(messages) > 0:
         for i, m in enumerate(messages):
             imap.copy_message(msg_id=messages[i], new_label='prueba 2')
+    imap.close()
     return render_template('base.html')
