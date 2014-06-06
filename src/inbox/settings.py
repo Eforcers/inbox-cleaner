@@ -10,8 +10,7 @@ Important: Place your keys in the secret_keys.py module,
 
 import os
 
-from secret_keys import CSRF_SECRET_KEY, SESSION_KEY, OAUTH2_CLIENT_ID, OAUTH2_CLIENT_SECRET
-
+from secret_keys import CSRF_SECRET_KEY, SESSION_KEY, OAUTH2_CLIENT_ID, OAUTH2_CLIENT_SECRET, OAUTH2_CONSUMER_KEY, OAUTH2_CONSUMER_SECRET
 
 class Config(object):
     # Set secret keys for CSRF protection
@@ -19,6 +18,8 @@ class Config(object):
     CSRF_SESSION_KEY = SESSION_KEY
     OAUTH2_CLIENT_ID = OAUTH2_CLIENT_ID
     OAUTH2_CLIENT_SECRET = OAUTH2_CLIENT_SECRET
+    OAUTH2_CONSUMER_KEY = OAUTH2_CONSUMER_KEY
+    OAUTH2_CONSUMER_SECRET = OAUTH2_CONSUMER_SECRET
     # Flask-Cache settings
     CACHE_TYPE = 'gaememcached'
 

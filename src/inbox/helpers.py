@@ -10,6 +10,18 @@ import logging
 import imaplib
 import constants
 
+import base64
+import csv
+import datetime
+import hashlib
+import hmac
+import imaplib
+import logging
+from optparse import OptionParser
+import random
+import sys
+import time
+import urllib
 
 class OAuthDanceHelper:
     """ OAuth dance helper class"""
@@ -73,6 +85,10 @@ class IMAPHelper:
     def __init__(self):
         self.mail_connection = imaplib.IMAP4_SSL(host=constants.IMAP_SERVER)
 
+    def oauth1_login(self):
+        self.consumer = OAuthEntity(app.config.get('OAUTH2_CONSUMER_KEY'),
+                               app.config.get('OAUTH2_CONSUMER_SECRET'))
+
     def login(self, email, password):
         logging.info("Connecting to IMAP server with user [%s]", email)
         result, data = self.mail_connection.login(email, password)
@@ -104,4 +120,16 @@ class IMAPHelper:
     def get_message(self, msg_id):
         result, data = self.mail_connection.uid('fetch', msg_id, '(RFC822)')
         return result, data
+
+    def list(self, user_email):
+        xoauth_string = GenerateXOauthString(self.consumer, user_email, 'GET', 'imap')
+
+
+
+
+
+
+
+
+
 
