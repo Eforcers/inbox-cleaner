@@ -25,6 +25,7 @@ from decorators import login_required
 from inbox.forms import CleanUserProcessForm, MoveProssessForm
 from inbox.models import CleanUserProcess, MoveProcess
 from inbox.pipelines import MoveProcessPipeline
+from inbox.tasks import schedule_user_move
 
 cache = Cache(app)
 
@@ -147,14 +148,8 @@ def move_process():
                     move_process.emails = emails
                     move_process.tag = form.data['tag']
                     move_process_key = move_process.put()
-                    # launch Pipeline
-                    move_process_pipeline = MoveProcessPipeline(
-                        move_process_id=move_process_key.id())
-                    move_process_pipeline.start()
-                    move_process.pipeline_id = move_process_pipeline.pipeline_id
-                    move_process.put()
-
-                    pipeline_url = '/_ah/pipeline/status?root=%s' % move_process_pipeline.pipeline_id
+                    for email in emails:
+                        schedule_user_move(user_email=email, tag=move_process.tag, move_process_key=move_process_key)
                 else:
                     form.errors['Emails'] = ['Emails should not be empty']
             except BadValueError, e:

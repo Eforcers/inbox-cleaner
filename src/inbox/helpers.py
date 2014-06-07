@@ -112,6 +112,7 @@ class IMAPHelper:
 
         result, data = self.mail_connection.uid('search', None,
                                                 r'(X-GM-RAW "%s")' % query)
+        self.mail_connection.expunge()
 
         msg_ids = []
         if result == 'OK':
@@ -121,6 +122,7 @@ class IMAPHelper:
 
     def get_message(self, msg_id):
         result, data = self.mail_connection.uid('fetch', msg_id, '(RFC822)')
+        self.mail_connection.expunge()
         return result, data
 
     def create_label(self, new_label=None):
@@ -152,11 +154,13 @@ class IMAPHelper:
         self.select(only_from_trash=only_from_trash)
         result, data = self.mail_connection.uid('COPY', msg_id,
                                                 destination_label)
+        self.mail_connection.expunge()
         return result, data
 
     def remove_message_label(self, msg_id=None, prev_label=None):
         result, data = self.mail_connection.uid('STORE', msg_id, '-X-GM-LABELS',
                                                 prev_label)
+        self.mail_connection.expunge()
         return result, data
 
 
@@ -164,9 +168,11 @@ class IMAPHelper:
         labels_string = '"' + '" "'.join(new_labels) + '"'
         result, data = self.mail_connection.uid('STORE', msg_id, '+X-GM-LABELS',
                                                 labels_string)
+        self.mail_connection.expunge()
         return result, data
 
     def get_message_labels(self, msg_id=None):
         result, data = self.mail_connection.uid('FETCH', msg_id, 'X-GM-LABELS')
+        self.mail_connection.expunge()
         return result, data
 

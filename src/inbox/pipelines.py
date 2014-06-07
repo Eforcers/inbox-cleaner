@@ -9,7 +9,7 @@ from livecount import counter
 import pipeline
 from pipeline.common import List
 from models import MoveProcess, MoveUserProcess
-from tasks import get_messages, move_message
+from tasks import get_messages, move_messages
 
 
 class MoveProcessPipeline(pipeline.Pipeline):
@@ -143,4 +143,3 @@ class MoveMessageProcessPipeline(pipeline.Pipeline):
                     'Failed retrieving a messagee id [%s] for [%s], '
                     'try again...', message_process_id, user_process.user_email)
                 raise e
-
