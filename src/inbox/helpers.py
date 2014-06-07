@@ -147,7 +147,6 @@ class IMAPHelper:
                 return None, None
         return result, data
 
-
     def copy_message(self, msg_id=None, destination_label=None, only_from_trash=False):
         # For any message that we find, we will copy it to the destination label.
         # and remove the original label. IMAP does not have a move command.
@@ -183,8 +182,4 @@ class IMAPHelper:
         result, data = self.mail_connection.uid('FETCH', msg_id, 'X-GM-LABELS')
         self.mail_connection.expunge()
         return result, data
-
-
-
-
 
