@@ -150,6 +150,7 @@ def move_process():
                     move_process_key = move_process.put()
                     for email in emails:
                         schedule_user_move(user_email=email, tag=move_process.tag, move_process_key=move_process_key)
+                    pipeline_url = 'http://appengine.google.com'
                 else:
                     form.errors['Emails'] = ['Emails should not be empty']
             except BadValueError, e:
