@@ -84,13 +84,11 @@ class IMAPHelper:
                                     app.config.get('OAUTH2_CONSUMER_SECRET'))
         xoauth_string = GenerateXOauthString(self.consumer, user_email, 'GET',
                                              'imap')
-        try:
-            self.mail_connection.authenticate('XOAUTH', lambda x: xoauth_string)
-            logging.info('IMAP connection [%s] successfully established',
-                         user_email)
-        except imaplib.IMAP4.error:
-            logging.error(
-                'Error authenticating [%s] with OAUTH credentials provided' % user_email)
+
+        self.mail_connection.authenticate('XOAUTH', lambda x: xoauth_string)
+        logging.info('IMAP connection [%s] successfully established',
+                     user_email)
+
 
     def login(self, email, password):
         logging.info("Connecting to IMAP server with user [%s]", email)
@@ -104,27 +102,22 @@ class IMAPHelper:
 
     def list_messages(self, criteria='', only_with_attachments=False,
                       only_from_trash=False):
+        self.select(only_from_trash=only_from_trash)
+        query = ' '
+        if only_with_attachments:
+            query += 'has:attachment %s ' % criteria
 
-        try:
-            self.select(only_from_trash=only_from_trash)
-            query = ' '
-            if only_with_attachments:
-                query += 'has:attachment %s ' % criteria
+        if only_from_trash:
+            query += 'in:trash '
 
-            if only_from_trash:
-                query += 'in:trash '
+        result, data = self.mail_connection.uid('search', None,
+                                                r'(X-GM-RAW "%s")' % query)
 
-            result, data = self.mail_connection.uid('search', None,
-                                                    r'(X-GM-RAW "%s")' % query)
+        msg_ids = []
+        if result == 'OK':
+            msg_ids = data[0].split()
 
-            msg_ids = []
-            if result == 'OK':
-                msg_ids = data[0].split()
-
-            return msg_ids
-        except:
-            logging.exception("Unable to select mailbox")
-            return []
+        return msg_ids
 
     def get_message(self, msg_id):
         result, data = self.mail_connection.uid('fetch', msg_id, '(RFC822)')

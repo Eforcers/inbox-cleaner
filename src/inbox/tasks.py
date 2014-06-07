@@ -8,26 +8,34 @@ from livecount import counter
 
 
 def get_messages(user_process=None, tag=None):
-    imap = IMAPHelper()
-    imap.oauth1_2lo_login(user_email=user_process.user_email)
-    if tag:
-        logging.info('Creating label [%s]', tag)
-        imap.create_label(tag)
-    msg_ids = imap.list_messages(only_from_trash=True)
-    imap.close()
     batch_list = []
-    n = constants.MESSAGE_BATCH_SIZE
+    try:
+        imap = IMAPHelper()
+        imap.oauth1_2lo_login(user_email=user_process.user_email)
+        if tag:
+            logging.info('Creating label [%s]', tag)
+            imap.create_label(tag)
+        msg_ids = imap.list_messages(only_from_trash=True)
+        imap.close()
 
-    for i in range(0, len(msg_ids), n):
-        ids = msg_ids[i:i + n]
-        batch_list.append(ids)
+        n = constants.MESSAGE_BATCH_SIZE
+
+        for i in range(0, len(msg_ids), n):
+            ids = msg_ids[i:i + n]
+            batch_list.append(ids)
+    except Exception as e:
+        logging.exception('Failed retrieving messages')
+        user_process.status = constants.FAILED
+        user_process.error_description = e.message
+        user_process.put()
     return batch_list
 
 
 def move_message(user_process=None, msg_id=None, label=None):
     message_process = MoveMessageProcess(email=user_process.user_email,
                                          message_id=msg_id,
-                                         user_process_key=user_process.key)
+                                         user_process_key=user_process.key,
+                                         status=constants.STARTED)
 
     try:
         imap = IMAPHelper()

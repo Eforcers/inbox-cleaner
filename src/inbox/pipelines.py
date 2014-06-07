@@ -20,7 +20,8 @@ class MoveProcessPipeline(pipeline.Pipeline):
         for email in emails:
             user_process = MoveUserProcess(
                 user_email=email,
-                move_process_key=process.key
+                move_process_key=process.key,
+                status=constants.STARTED
             )
             user_process_key = user_process.put()
             user_process_id = user_process_key.id()
@@ -34,7 +35,7 @@ class MoveProcessPipeline(pipeline.Pipeline):
         move_process_id = self.kwargs.get('move_process_id')
         logging.info('Finishing process [%s]', move_process_id)
         process = MoveProcess.get_by_id(move_process_id)
-        process.state = constants.FINISHED
+        process.status = constants.FINISHED
         process.execution_finish = datetime.now()
         process.put()
 
@@ -57,8 +58,9 @@ class MoveUserProcessPipeline(pipeline.Pipeline):
 
     def finalized(self):
         user_process_id = self.kwargs.get('user_process_id')
+        logging.info('Finishing user process [%s]', user_process_id)
         user_process = MoveUserProcess.get_by_id(user_process_id)
-        user_process.state = constants.FINISHED
+        user_process.status = constants.FINISHED
         user_process.put()
 
 

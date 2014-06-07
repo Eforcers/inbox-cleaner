@@ -44,6 +44,14 @@ handlers:
   script: run.deferred_app
   login: admin
 
+- url: /livecount/counter_admin
+  script: run.livecount.counter_admin.application
+  login: admin
+
+- url: /livecount/.*
+  script: run.livecount.counter.application
+  login: admin
+
 - url: /favicon.ico
   static_files: inbox/static/img/favicon.ico
   upload: inbox/static/img/favicon.ico
