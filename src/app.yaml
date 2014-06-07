@@ -1,8 +1,14 @@
 application: www-eicg
+module: default
 version: 2014q2053-staging
 runtime: python27
 api_version: 1
 threadsafe: true
+instance_class: F4_1G
+
+automatic_scaling:
+  max_idle_instances: 50
+  min_pending_latency: 1s
 
 default_expiration: "5d"
 
@@ -40,8 +46,12 @@ handlers:
 - url: /_ah/pipeline(/.*)?
   script: run.handlers._APP
 
-- url: /_ah/queue/deferred
-  script: run.deferred_app
+- url: /livecount/counter_admin
+  script: run.livecount.counter_admin.application
+  login: admin
+
+- url: /livecount/.*
+  script: run.livecount.counter.application
   login: admin
 
 - url: /favicon.ico

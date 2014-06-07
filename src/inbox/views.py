@@ -9,18 +9,13 @@ For example the *say_hello* handler, handling the URL route '/hello/<username>',
   must be passed *username* as the argument.
 
 """
-from csv import DictReader
 import logging
-from datetime import datetime
 
 from google.appengine.api import users
 from google.appengine.api.datastore_errors import BadValueError
-from google.appengine.ext import deferred
-from google.appengine.runtime.apiproxy_errors import CapabilityDisabledError
-from google.appengine.ext.db.metadata import get_namespaces
 
 from helpers import OAuthDanceHelper, DirectoryHelper
-from flask import request, render_template, flash, url_for, redirect, abort, g
+from flask import request, render_template, url_for, redirect, abort, g
 from flask_cache import Cache
 from inbox import app, constants
 from decorators import login_required
@@ -29,8 +24,10 @@ from decorators import login_required
 # Flask-Cache (configured to use App Engine Memcache API)
 from inbox.forms import CleanUserProcessForm, MoveProssessForm
 from inbox.models import CleanUserProcess, MoveProcess
-from inbox.pipelines import  MoveProcessPipeline
+from inbox.pipelines import MoveProcessPipeline
+from inbox.tasks import schedule_user_move
 
+from google.appengine.ext import deferred
 cache = Cache(app)
 
 
@@ -63,6 +60,7 @@ def warmup():
 
     """
     return ''
+
 
 @app.route('/')
 def index():
@@ -111,7 +109,7 @@ def oauth_callback(self):
     return redirect(url_for('settings'))
 
 
-@app.route('/process/', methods=['GET','POST'])
+@app.route('/process/', methods=['GET', 'POST'])
 @login_required
 def list_process():
     form = CleanUserProcessForm()
@@ -119,15 +117,18 @@ def list_process():
     clean_process_saved = False
     if request.method == 'POST':
         if form.validate_on_submit():
-            clean_user_process = CleanUserProcess(owner_email=user.email(),
-                                                  destination_message_email=user.email())
+            clean_user_process = CleanUserProcess(
+                owner_email=user.email(),
+                destination_message_email=user.email(),
+                status=constants.STARTED
+            )
             for key, value in form.data.iteritems():
-                setattr(clean_user_process,key,value)
+                setattr(clean_user_process, key, value)
             clean_user_process.put()
             clean_process_saved = True
-            #launch Pipeline
+            # launch Pipeline
 
-    return render_template('process.html',form=form, user=user.email(),
+    return render_template('process.html', form=form, user=user.email(),
                            clean_process_saved=clean_process_saved)
 
 
@@ -147,61 +148,61 @@ def move_process():
                 if len(emails) > 0:
                     move_process.emails = emails
                     move_process.tag = form.data['tag']
-                    move_process_key =  move_process.put()
-                    #launch Pipeline
-                    move_process_pipeline = MoveProcessPipeline(
-                        move_process_key.id())
-                    move_process_pipeline.start()
-                    move_process.pipeline_id = move_process_pipeline.pipeline_id
-                    move_process.put()
-                    
-                    pipeline_url = '/_ah/pipeline/status?root=%s' % move_process_pipeline.pipeline_id
+                    move_process_key = move_process.put()
+                    for email in emails:
+                        deferred.defer(schedule_user_move, user_email=email, tag=move_process.tag, move_process_key=move_process_key)
+                    pipeline_url = 'http://appengine.google.com'
                 else:
                     form.errors['Emails'] = ['Emails should not be empty']
             except BadValueError, e:
                 logging.exception('error saving process')
                 form.errors['Emails'] = ['Emails are malformed']
 
-
     return render_template('move_process.html', form=form, user=user.email(),
                            pipeline_url=pipeline_url)
 
 
-## Error handlers
+# # Error handlers
 # Handle 404 errors
 @app.errorhandler(404)
 def page_not_found(e):
     return render_template('404.html'), 404
+
 
 # Handle 500 errors
 @app.errorhandler(500)
 def server_error(e):
     return render_template('500.html'), 500
 
+
 # Handle 403 errors
 @app.errorhandler(403)
 def unauthorized(e):
     return render_template('403.html'), 403
 
+
 @app.route('/imaptest/')
 def list_messages():
     from helpers import IMAPHelper
     from secret_keys import TEST_LOGIN, TEST_PASS
+
     imap = IMAPHelper()
     imap.login(TEST_LOGIN, TEST_PASS)
     print imap.list_messages()
     return render_template('base.html')
 
+
 @app.route('/imapmovetest/')
 def move_message():
     from helpers import IMAPHelper
+
     imap = IMAPHelper()
-    imap.oauth1_2lo_login('administrador@eforcers.com.co')
-    result, messages = imap.list_messages(only_from_trash=True)
+    imap.oauth1_2lo_login('prueba44@david.eforcers.com.co')
+    messages = imap.list_messages(only_from_trash=True)
     print messages
     imap.create_label('prueba 2')
     if len(messages) > 0:
         for i, m in enumerate(messages):
-            imap.copy_message(msg_id=messages[i], new_label='prueba 2')
+            imap.copy_message(msg_id=messages[i], destination_label='prueba 2')
     imap.close()
     return render_template('base.html')
