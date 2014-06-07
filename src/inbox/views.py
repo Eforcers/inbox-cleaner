@@ -115,8 +115,11 @@ def list_process():
     clean_process_saved = False
     if request.method == 'POST':
         if form.validate_on_submit():
-            clean_user_process = CleanUserProcess(owner_email=user.email(),
-                                                  destination_message_email=user.email())
+            clean_user_process = CleanUserProcess(
+                owner_email=user.email(),
+                destination_message_email=user.email(),
+                status=constants.STARTED
+            )
             for key, value in form.data.iteritems():
                 setattr(clean_user_process, key, value)
             clean_user_process.put()
