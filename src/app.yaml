@@ -1,4 +1,5 @@
 application: www-eicg
+module: default
 version: 2014q2053-staging
 runtime: python27
 api_version: 1

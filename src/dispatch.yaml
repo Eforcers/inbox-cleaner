@@ -6,5 +6,5 @@ dispatch:
   module: backend
 
 # Default module serves the typical web resources and all static resources.
-- url: ".*"
+- url: "*/favicon.ico"
   module: default

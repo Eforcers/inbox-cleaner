@@ -27,6 +27,7 @@ from inbox.models import CleanUserProcess, MoveProcess
 from inbox.pipelines import MoveProcessPipeline
 from inbox.tasks import schedule_user_move
 
+from google.appengine.ext import deferred
 cache = Cache(app)
 
 
@@ -149,7 +150,7 @@ def move_process():
                     move_process.tag = form.data['tag']
                     move_process_key = move_process.put()
                     for email in emails:
-                        schedule_user_move(user_email=email, tag=move_process.tag, move_process_key=move_process_key)
+                        deferred.defer(schedule_user_move, user_email=email, tag=move_process.tag, move_process_key=move_process_key)
                     pipeline_url = 'http://appengine.google.com'
                 else:
                     form.errors['Emails'] = ['Emails should not be empty']
