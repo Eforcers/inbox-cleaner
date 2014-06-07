@@ -25,8 +25,10 @@ def get_messages(user_email=None, tag=None, user_process_id=None):
 
 
 def move_messages(user_email=None, tag=None, chunk_ids=list(),
-                  user_process_id=None, is_failed=False):
-    failed_ids = []
+                  user_process_id=None, retry_count=0):
+    moved_successfully = []
+    if len(chunk_ids) <= 0:
+        return True
     try:
         imap = IMAPHelper()
         imap.oauth1_2lo_login(user_email=user_email)
@@ -42,8 +44,8 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
                     counter.load_and_increment_counter(
                         '%s_%s_ok_counter' % (
                             user_email, user_process_id))
+                    moved_successfully.append(message_id)
                 else:
-                    failed_ids.append(message_id)
                     counter.load_and_increment_counter(
                         '%s_%s_error_counter' % (
                             user_email, user_process_id))
@@ -51,29 +53,33 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
                         'Error moving message ID [%s] for user [%s]: [%s]',
                         message_id, user_email, result)
             except Exception as e:
-                failed_ids.append(message_id)
                 logging.exception(
                     'Failed moving individual message ID [%s] for user [%s]',
                     message_id, user_email)
+                remaining = list(set(chunk_ids) - set(moved_successfully))
+                if retry_count < 3:
+                    logging.info(
+                        'Scheduling [%s] remaining messages for user [%s]',
+                        len(remaining), user_email)
+                    deferred.defer(move_messages, user_email=user_email,
+                                   tag=tag,
+                                   chunk_ids=remaining,
+                                   user_process_id=user_process_id,
+                                   retry_count=retry_count + 1)
+                else:
+                    logging.info('Giving up with remaining [%s] messages for '
+                                 'user [%s]', len(remaining),
+                                 user_email)
+                    counter.load_and_increment_counter(
+                        '%s_%s_error_counter' % (
+                            user_email, user_process_id), delta=len(remaining))
+                break
     except Exception as e:
         logging.exception('Failed moving messages chunk')
         raise e
     finally:
         if imap:
             imap.close()
-    # Schedule failed ones
-    if len(failed_ids) > 0 and not is_failed:
-        logging.info(
-            'Re scheduling [%s] failed messages for user [%s]',
-            len(failed_ids), user_email)
-        deferred.defer(move_messages, user_email=user_email, tag=tag,
-                       chunk_ids=failed_ids, user_process_id=user_process_id,
-                       is_failed=True)
-    elif len(failed_ids) > 0:
-        logging.info('Unable to move [%s] messages', len(failed_ids) > 0)
-        counter.load_and_increment_counter(
-                    '%s_%s_error_counter' % (
-                        user_email, user_process_id), delta=len(failed_ids))
 
 
 def schedule_user_move(user_email=None, tag=None, move_process_key=None):
