@@ -17,11 +17,14 @@ def get_messages(user_email=None, tag=None, user_process_id=None):
         imap.create_label(tag)
     msg_ids = imap.list_messages(only_from_trash=True)
     imap.close()
-    n = constants.MESSAGE_BATCH_SIZE
-    counter.load_and_increment_counter(
-        '%s_%s_total_counter' % (
-            user_email, user_process_id), delta=len(msg_ids))
-    return [msg_ids[i::n] for i in xrange(n)]
+    if len(msg_ids) > 0:
+        n = constants.MESSAGE_BATCH_SIZE
+        counter.load_and_increment_counter('%s_total_count' % user_email,
+                                           delta=len(msg_ids),
+                                           namespace=str(user_process_id))
+        return [msg_ids[i::n] for i in xrange(n)]
+    else:
+        return []
 
 
 def move_messages(user_email=None, tag=None, chunk_ids=list(),
@@ -42,16 +45,15 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
                 )
                 if result == 'OK':
                     counter.load_and_increment_counter(
-                        '%s_%s_ok_counter' % (
-                            user_email, user_process_id))
+                        '%s_ok_count' % (user_email))
                     moved_successfully.append(message_id)
                 else:
                     counter.load_and_increment_counter(
-                        '%s_%s_error_counter' % (
-                            user_email, user_process_id))
+                        '%s_error_count' % user_email)
                     logging.error(
-                        'Error moving message ID [%s] for user [%s]: [%s]',
-                        message_id, user_email, result)
+                        'Error moving message ID [%s] for user [%s]: [%s] '
+                        'data [%s]',
+                        message_id, user_email, result, data)
             except Exception as e:
                 logging.exception(
                     'Failed moving individual message ID [%s] for user [%s]',
@@ -71,8 +73,7 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
                                  'user [%s]', len(remaining),
                                  user_email)
                     counter.load_and_increment_counter(
-                        '%s_%s_error_counter' % (
-                            user_email, user_process_id), delta=len(remaining))
+                        '%s_error_count' % user_email, delta=len(remaining))
                 break
     except Exception as e:
         logging.exception('Failed moving messages chunk')
@@ -89,7 +90,8 @@ def schedule_user_move(user_email=None, tag=None, move_process_key=None):
         status=constants.STARTED
     )
     user_process_key = user_process.put()
-    for chunk_ids in get_messages(user_email, tag, user_process_key.id()):
+    for chunk_ids in get_messages(user_email=user_email, tag=tag,
+                                  user_process_id=user_process_key.id()):
         if len(chunk_ids) > 0:
             logging.info('Scheduling user [%s] messages move', user_email)
             deferred.defer(move_messages, user_email=user_email, tag=tag,

@@ -61,6 +61,20 @@ def warmup():
     """
     return ''
 
+@app.route('/_ah/stop')
+def stop():
+    """App Engine stop backend handler
+
+    """
+    return ''
+
+@app.route('/_ah/start')
+def stop():
+    """App Engine start backend handler
+
+    """
+    return ''
+
 
 @app.route('/')
 def index():
