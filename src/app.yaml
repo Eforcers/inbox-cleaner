@@ -7,7 +7,7 @@ threadsafe: true
 instance_class: F4_1G
 
 automatic_scaling:
-  max_idle_instances: 50
+  max_idle_instances: 5
   min_pending_latency: 1s
 
 default_expiration: "5d"

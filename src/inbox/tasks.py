@@ -9,7 +9,7 @@ from inbox.models import MoveUserProcess
 from livecount import counter
 
 
-def get_messages(user_email=None, tag=None, user_process_id=None):
+def get_messages(user_email=None, tag=None, process_id=None):
     imap = IMAPHelper()
     imap.oauth1_2lo_login(user_email=user_email)
     if tag:
@@ -21,7 +21,7 @@ def get_messages(user_email=None, tag=None, user_process_id=None):
         n = constants.MESSAGE_BATCH_SIZE
         counter.load_and_increment_counter('%s_total_count' % user_email,
                                            delta=len(msg_ids),
-                                           namespace=str(user_process_id))
+                                           namespace=str(process_id))
         return [msg_ids[i::n] for i in xrange(n)]
     else:
         return []
@@ -91,7 +91,7 @@ def schedule_user_move(user_email=None, tag=None, move_process_key=None):
     )
     user_process_key = user_process.put()
     for chunk_ids in get_messages(user_email=user_email, tag=tag,
-                                  user_process_id=user_process_key.id()):
+                                  process_id=move_process_key.id()):
         if len(chunk_ids) > 0:
             logging.info('Scheduling user [%s] messages move', user_email)
             deferred.defer(move_messages, user_email=user_email, tag=tag,
