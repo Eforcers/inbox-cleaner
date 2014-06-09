@@ -28,7 +28,7 @@ from tasks import schedule_user_move, generate_count_report
 from inbox.forms import CleanUserProcessForm, MoveProssessForm
 from inbox.models import CleanUserProcess, MoveProcess
 from inbox.pipelines import MoveProcessPipeline
-from inbox.tasks import schedule_user_move
+from inbox.tasks import schedule_user_move, schedule_user_cleaning
 
 from google.appengine.ext import deferred
 cache = Cache(app)
@@ -127,9 +127,11 @@ def list_process():
             )
             for key, value in form.data.iteritems():
                 setattr(clean_user_process, key, value)
-            clean_user_process.put()
+            clean_process_key = clean_user_process.put()
             clean_process_saved = True
             # launch Pipeline
+            deferred.defer(schedule_user_cleaning, user_email=user.email(),
+                           clean_process_key=clean_process_key)
 
     return render_template('process.html', form=form, user=user.email(),
                            clean_process_saved=clean_process_saved)
@@ -191,3 +193,21 @@ def server_error(e):
 @app.errorhandler(403)
 def unauthorized(e):
     return render_template('403.html'), 403
+
+@app.route('/labeltest/')
+def label_test():
+    from helpers import IMAPHelper
+
+    imap = IMAPHelper()
+    imap.oauth1_2lo_login('administrador@eforcers.com.co')
+    labels = imap.get_localized_labels()
+    labels = imap.all_labels
+    print labels[constants.GMAIL_ALL_KEY]
+    print labels[constants.GMAIL_TRASH_KEY]
+    imap.select(only_from_trash=True)
+    messages = imap.list_messages(only_from_trash=True)
+    print messages
+    imap.select()
+    messages = imap.list_messages()
+    print messages
+    return 'yay'

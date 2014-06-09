@@ -26,6 +26,20 @@ def get_messages(user_email=None, tag=None, process_id=None):
     else:
         return []
 
+def get_messages_for_cleaning(user_email=None):
+    imap = IMAPHelper()
+    imap.oauth1_2lo_login(user_email=user_email)
+    msg_ids = imap.list_messages()
+    imap.close()
+    if len(msg_ids) > 0:
+        n = constants.MESSAGE_BATCH_SIZE
+        counter.load_and_increment_counter('cleaning_%s_total_count' % user_email,
+                                           delta=len(msg_ids),
+                                           namespace=str(process_id))
+        return [msg_ids[i::n] for i in xrange(n)]
+    else:
+        return []
+
 
 def move_messages(user_email=None, tag=None, chunk_ids=list(),
                   process_id=None, retry_count=0):
@@ -94,6 +108,30 @@ def schedule_user_move(user_email=None, tag=None, move_process_key=None):
             deferred.defer(move_messages, user_email=user_email, tag=tag,
                            chunk_ids=chunk_ids,
                            process_id=move_process_key.id())
+
+def clean_messages(user_email=None, chunk_ids=list(), retry_count=0):
+    moved_successfully = []
+    if len(chunk_ids) <= 0:
+        return True
+    try:
+        imap = IMAPHelper()
+        imap.oauth1_2lo_login(user_email=user_email)
+        imap.select()
+        for message_id in chunk_ids:
+            pass
+    except Exception as e:
+        logging.exception('Failed cleaning messages chunk')
+        raise e
+    finally:
+        if imap:
+            imap.close()
+
+def schedule_user_cleaning(user_email=None, clean_process_key=None):
+    for chunk_ids in get_messages(user_email=user_email):
+        if len(chunk_ids) > 0:
+            logging.info('Scheduling user [%s] messages cleaning', user_email)
+            deferred.defer(clean_messages, user_email=user_email,
+                           chunk_ids=chunk_ids)
 
 
 def generate_count_report():

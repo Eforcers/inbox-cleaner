@@ -19,7 +19,7 @@ CleanUserProcessForm = model_form(CleanUserProcess, wtf.Form,field_args={
     'source_password': dict(validators=[validators.Required()]),
     'search_criteria': dict(validators=[validators.Required()]),
 },exclude=['destination_message_email','owner_email',
-           'credentials','refresh_token','status'] )
+           'credentials','refresh_token','status','pipeline_id'] )
 
 
 class MoveProssessForm(wtf.Form):
