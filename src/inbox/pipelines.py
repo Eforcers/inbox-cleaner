@@ -9,12 +9,12 @@ from livecount import counter
 import pipeline
 from pipeline.common import List
 from models import MoveProcess, MoveUserProcess
-from tasks import get_messages, move_messages
+from tasks import get_messages, move_message
 
 
 class MoveProcessPipeline(pipeline.Pipeline):
     def run(self, move_process_id):
-        logging.info("Starting moving process [%s]", move_process_id)
+        logging.info("start process for move_process %s", move_process_id)
         process = MoveProcess.get_by_id(move_process_id)
         emails = process.emails
 
@@ -44,7 +44,6 @@ class MoveProcessPipeline(pipeline.Pipeline):
 class MoveUserProcessPipeline(pipeline.Pipeline):
     def run(self, user_process_id=None, tag=None):
         user_process = MoveUserProcess.get_by_id(user_process_id)
-        logging.info("Starting user process [%s]", user_process.user_email)
         try:
             messages = get_messages(user_process, tag)
             message_processes = []
@@ -74,8 +73,8 @@ class MoveUserProcessPipeline(pipeline.Pipeline):
 
     def finalized(self):
         user_process_id = self.kwargs.get('user_process_id')
+        logging.info('Finishing user process [%s]', user_process_id)
         user_process = MoveUserProcess.get_by_id(user_process_id)
-        logging.info('Finishing user process [%s]', user_process.user_email)
         if not self.was_aborted:
             user_process.status = constants.FINISHED
             user_process.error_description = None
@@ -85,10 +84,9 @@ class MoveUserProcessPipeline(pipeline.Pipeline):
 class MoveBatchMessagesProcessPipeline(pipeline.Pipeline):
     def run(self, batch=None, user_process_id=None):
         user_process = MoveUserProcess.get_by_id(user_process_id)
-        logging.info("Starting user process [%s]", user_process.user_email)
         move_process = user_process.move_process_key.get()
         failed_messages = []
-        # Create connection
+        #Create connection
         imap = IMAPHelper()
         imap.oauth1_2lo_login(user_email=user_process.user_email)
         for msg_id in batch:
@@ -102,17 +100,16 @@ class MoveBatchMessagesProcessPipeline(pipeline.Pipeline):
                 move_message(user_process=user_process,
                              message_process_id=message_process_key.id(),
                              label=move_process.tag, imap=imap)
-            except:
+            except Exception as e:
                 logging.exception(
                     'Failed while moving message [%s] for user [%s], '
-                    'try again, alone', msg_id, user_process.user_email)
+                    'try again...', msg_id, user_process.user_email)
                 failed_messages.append(
                     (yield MoveMessageProcessPipeline(
                         message_process_id=message_process_key.id(),
                         move_process_id=move_process.key.id()))
                 )
         imap.close()
-        yield List(*failed_messages)
 
 
 class MoveMessageProcessPipeline(pipeline.Pipeline):
@@ -142,4 +139,5 @@ class MoveMessageProcessPipeline(pipeline.Pipeline):
                 logging.exception(
                     'Failed retrieving a messagee id [%s] for [%s], '
                     'try again...', message_process_id, user_process.user_email)
-                raise e
+        raise e
+

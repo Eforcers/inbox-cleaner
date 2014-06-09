@@ -25,6 +25,12 @@ from models import CleanUserProcess, MoveProcess
 from tasks import schedule_user_move, generate_count_report
 
 # Flask-Cache (configured to use App Engine Memcache API)
+from inbox.forms import CleanUserProcessForm, MoveProssessForm
+from inbox.models import CleanUserProcess, MoveProcess
+from inbox.pipelines import MoveProcessPipeline
+from inbox.tasks import schedule_user_move
+
+from google.appengine.ext import deferred
 cache = Cache(app)
 
 
@@ -54,14 +60,6 @@ def before_request():
 def warmup():
     """App Engine warmup handler
     See http://code.google.com/appengine/docs/python/config/appconfig.html#Warming_Requests
-
-    """
-    return ''
-
-
-@app.route('/_ah/start')
-def start():
-    """App Engine start backend handler
 
     """
     return ''
@@ -193,30 +191,3 @@ def server_error(e):
 @app.errorhandler(403)
 def unauthorized(e):
     return render_template('403.html'), 403
-
-
-@app.route('/imaptest/')
-def list_messages():
-    from helpers import IMAPHelper
-    from secret_keys import TEST_LOGIN, TEST_PASS
-
-    imap = IMAPHelper()
-    imap.login(TEST_LOGIN, TEST_PASS)
-    print imap.list_messages()
-    return render_template('base.html')
-
-
-@app.route('/imapmovetest/')
-def move_message():
-    from helpers import IMAPHelper
-
-    imap = IMAPHelper()
-    imap.oauth1_2lo_login('prueba44@david.eforcers.com.co')
-    messages = imap.list_messages(only_from_trash=True)
-    print messages
-    imap.create_label('prueba 2')
-    if len(messages) > 0:
-        for i, m in enumerate(messages):
-            imap.copy_message(msg_id=messages[i], destination_label='prueba 2')
-    imap.close()
-    return render_template('base.html')

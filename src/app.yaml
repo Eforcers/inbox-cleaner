@@ -43,6 +43,8 @@ error_handlers:
     file: inbox/templates/errors/timeout.html
 
 handlers:
+- url: /_ah/pipeline(/.*)?
+  script: run.handlers._APP
 
 - url: /favicon.ico
   static_files: inbox/static/img/favicon.ico
