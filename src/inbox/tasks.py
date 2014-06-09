@@ -5,7 +5,7 @@ from google.appengine.ext import deferred
 
 from helpers import IMAPHelper
 import constants
-from inbox.models import MoveUserProcess
+from inbox.models import ProcessedUser, MoveProcess
 from livecount import counter
 
 
@@ -28,7 +28,7 @@ def get_messages(user_email=None, tag=None, process_id=None):
 
 
 def move_messages(user_email=None, tag=None, chunk_ids=list(),
-                  user_process_id=None, retry_count=0):
+                  process_id=None, retry_count=0):
     moved_successfully = []
     if len(chunk_ids) <= 0:
         return True
@@ -45,11 +45,13 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
                 )
                 if result == 'OK':
                     counter.load_and_increment_counter(
-                        '%s_ok_count' % (user_email))
+                        '%s_ok_count' % (user_email),
+                        namespace=str(process_id))
                     moved_successfully.append(message_id)
                 else:
                     counter.load_and_increment_counter(
-                        '%s_error_count' % user_email)
+                        '%s_error_count' % user_email,
+                        namespace=str(process_id))
                     logging.error(
                         'Error moving message ID [%s] for user [%s]: [%s] '
                         'data [%s]',
@@ -66,14 +68,15 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
                     deferred.defer(move_messages, user_email=user_email,
                                    tag=tag,
                                    chunk_ids=remaining,
-                                   user_process_id=user_process_id,
+                                   process_id=process_id,
                                    retry_count=retry_count + 1)
                 else:
                     logging.info('Giving up with remaining [%s] messages for '
                                  'user [%s]', len(remaining),
                                  user_email)
                     counter.load_and_increment_counter(
-                        '%s_error_count' % user_email, delta=len(remaining))
+                        '%s_error_count' % user_email, delta=len(remaining),
+                        namespace=str(process_id))
                 break
     except Exception as e:
         logging.exception('Failed moving messages chunk')
@@ -84,16 +87,47 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
 
 
 def schedule_user_move(user_email=None, tag=None, move_process_key=None):
-    user_process = MoveUserProcess(
-        user_email=user_email,
-        move_process_key=move_process_key,
-        status=constants.STARTED
-    )
-    user_process_key = user_process.put()
     for chunk_ids in get_messages(user_email=user_email, tag=tag,
                                   process_id=move_process_key.id()):
         if len(chunk_ids) > 0:
             logging.info('Scheduling user [%s] messages move', user_email)
             deferred.defer(move_messages, user_email=user_email, tag=tag,
                            chunk_ids=chunk_ids,
-                           user_process_id=user_process_key.id())
+                           process_id=move_process_key.id())
+
+
+def generate_count_report():
+    # Process counters with the latest syntax
+    futures = []
+    for process in MoveProcess.query().fetch():
+        process_ok_count = 0
+        process_error_count = 0
+        process_total_count = 0
+        for email in process.emails:
+            user = ProcessedUser.get_by_id(email)
+            if not user:
+                user = ProcessedUser(id=email, ok_count=0, error_count=0,
+                                     total_count=list())
+            total_count = counter.load_and_get_count(
+                '%s_total_count' % email, namespace=str(process.key.id()))
+            if total_count:
+                process_total_count += total_count
+                if total_count not in user.total_count:
+                    user.total_count.append(total_count)
+            ok_count = counter.load_and_get_count(
+                '%s_ok_count' % email, namespace=str(process.key.id()))
+            if ok_count:
+                process_ok_count += ok_count
+                user.ok_count += ok_count
+            error_count = counter.load_and_get_count(
+                '%s_error_count' % email, namespace=str(process.key.id()))
+            if error_count:
+                process_error_count += error_count
+                user.error_count += error_count
+            futures.append(user.put_async())
+        process.ok_count = process_ok_count
+        process.error_count = process_error_count
+        process.total_count = process_total_count
+        futures.append(process.put_async())
+    # Process futures
+    [future.get_result() for future in futures]

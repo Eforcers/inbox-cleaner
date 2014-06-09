@@ -73,6 +73,7 @@ class DirectoryHelper(OAuthServiceHelper):
 class IMAPHelper:
     """ IMAP helper class"""
     mail_connection = None
+    all_labels = {}
 
     def __init__(self):
         self.mail_connection = imaplib.IMAP4_SSL(host=constants.IMAP_SERVER,
@@ -94,6 +95,15 @@ class IMAPHelper:
         result, data = self.mail_connection.login(email, password)
         return result, data
 
+    def get_localized_labels(self):
+        result, mail_labels = self.mail_connection.list()
+        if result == 'OK':
+            for labels in mail_labels:
+                key, label = labels.split(' "/" ')
+                self.all_labels[key] = label
+
+        return self.all_labels
+
     def close(self):
         logging.info('IMAP connection state: %s', self.mail_connection.state)
         try:
@@ -109,11 +119,12 @@ class IMAPHelper:
         self.select(only_from_trash=only_from_trash)
         query = ' '
         if only_with_attachments:
-            query += 'has:attachment %s ' % criteria
+            query += 'has:attachment '
 
         if only_from_trash:
             query += 'in:trash '
 
+        query += '%s ' % criteria
         result, data = self.mail_connection.uid('search', None,
                                                 r'(X-GM-RAW "%s")' % query)
 
@@ -133,21 +144,18 @@ class IMAPHelper:
         self.mail_connection.create(new_label)
 
     def select(self, only_from_trash=False):
+        self.get_localized_labels()
         if only_from_trash:
-            en_label = constants.IMAP_TRASH_LABEL_EN
-            es_label = constants.IMAP_TRASH_LABEL_ES
+            main_label = self.all_labels[constants.GMAIL_TRASH_KEY]
         else:
-            en_label = constants.IMAP_ALL_LABEL_EN
-            es_label = constants.IMAP_ALL_LABEL_ES
-        result, data = self.mail_connection.select(es_label)
-        # Try in english if not found in spanish
+            main_label = self.all_labels[constants.GMAIL_ALL_KEY]
+        result, data = self.mail_connection.select(main_label)
+
         if result != 'OK':
-            result, data = self.mail_connection.select(en_label)
-            if result != 'OK':
-                # Maybe configured in another language or label name is wrong
-                logging.error("Unable to get count for all label. %s [%s]",
-                              result, data)
-                return None, None
+            # Maybe configured in another language or label name is wrong
+            logging.error("Unable to get count for all label. %s [%s]",
+                          result, data)
+            return None, None
         return result, data
 
     def copy_message(self, msg_id=None, destination_label=None, only_from_trash=False):
@@ -174,3 +182,7 @@ class IMAPHelper:
         result, data = self.mail_connection.uid('FETCH', msg_id, 'X-GM-LABELS')
         return result, data
 
+    def delete_message(self, msg_id=None):
+        self.mail_connection.uid('COPY', msg_id,
+                             self.all_labels[constants.GMAIL_TRASH_KEY])
+        self.mail_connection.expunge()

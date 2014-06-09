@@ -14,13 +14,16 @@ import logging
 from google.appengine.api import users
 from google.appengine.api.datastore_errors import BadValueError
 from google.appengine.datastore.datastore_query import Cursor
+from google.appengine.ext import deferred
 
 from helpers import OAuthDanceHelper, DirectoryHelper
 from flask import request, render_template, url_for, redirect, abort, g
 from flask_cache import Cache
 from inbox import app, constants
 from decorators import login_required
-
+from forms import CleanUserProcessForm, MoveProssessForm
+from models import CleanUserProcess, MoveProcess
+from tasks import schedule_user_move, generate_count_report
 
 # Flask-Cache (configured to use App Engine Memcache API)
 from inbox.forms import CleanUserProcessForm, MoveProssessForm
@@ -58,14 +61,6 @@ def before_request():
 def warmup():
     """App Engine warmup handler
     See http://code.google.com/appengine/docs/python/config/appconfig.html#Warming_Requests
-
-    """
-    return ''
-
-
-@app.route('/_ah/start')
-def start():
-    """App Engine start backend handler
 
     """
     return ''
@@ -178,7 +173,8 @@ def move_process():
     if request.method == 'POST':
         if form.validate_on_submit():
             try:
-                move_process = MoveProcess()
+                move_process = MoveProcess(ok_count=0, error_count=0,
+                                           total_count=0)
                 emails = list(set([
                     email.strip() for email in form.data['emails']
                         .splitlines()]))
@@ -187,7 +183,9 @@ def move_process():
                     move_process.tag = form.data['tag']
                     move_process_key = move_process.put()
                     for email in emails:
-                        deferred.defer(schedule_user_move, user_email=email, tag=move_process.tag, move_process_key=move_process_key)
+                        deferred.defer(schedule_user_move, user_email=email,
+                                       tag=move_process.tag,
+                                       move_process_key=move_process_key)
                     pipeline_url = 'http://appengine.google.com'
                 else:
                     form.errors['Emails'] = ['Emails should not be empty']
@@ -197,6 +195,12 @@ def move_process():
 
     return render_template('move_process.html', form=form, user=user.email(),
                            pipeline_url=pipeline_url)
+
+
+@app.route('/cron/process/count')
+def count_report():
+    deferred.defer(generate_count_report)
+    return 'Count report is being generated...'
 
 
 # # Error handlers
@@ -216,30 +220,3 @@ def server_error(e):
 @app.errorhandler(403)
 def unauthorized(e):
     return render_template('403.html'), 403
-
-
-@app.route('/imaptest/')
-def list_messages():
-    from helpers import IMAPHelper
-    from secret_keys import TEST_LOGIN, TEST_PASS
-
-    imap = IMAPHelper()
-    imap.login(TEST_LOGIN, TEST_PASS)
-    print imap.list_messages()
-    return render_template('base.html')
-
-
-@app.route('/imapmovetest/')
-def move_message():
-    from helpers import IMAPHelper
-
-    imap = IMAPHelper()
-    imap.oauth1_2lo_login('prueba44@david.eforcers.com.co')
-    messages = imap.list_messages(only_from_trash=True)
-    print messages
-    imap.create_label('prueba 2')
-    if len(messages) > 0:
-        for i, m in enumerate(messages):
-            imap.copy_message(msg_id=messages[i], destination_label='prueba 2')
-    imap.close()
-    return render_template('base.html')
