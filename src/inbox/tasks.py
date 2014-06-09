@@ -30,6 +30,7 @@ def get_messages(user_email=None, tag=None, process_id=None):
 def move_messages(user_email=None, tag=None, chunk_ids=list(),
                   process_id=None, retry_count=0):
     moved_successfully = []
+    imap = None
     if len(chunk_ids) <= 0:
         return True
     try:
@@ -99,10 +100,16 @@ def schedule_user_move(user_email=None, tag=None, move_process_key=None):
 def generate_count_report():
     # Process counters with the latest syntax
     futures = []
-    for process in MoveProcess.query().fetch():
+    processes = MoveProcess.query().fetch()
+    logging.info('Generating count report in [%s] processes', len(processes))
+    for process in processes:
         process_ok_count = 0
         process_error_count = 0
         process_total_count = 0
+        if process.total_count and process.total_count != 0:
+            logging.info('Process [%s] counters already calculated',
+                         process.key.id())
+            continue
         for email in process.emails:
             user = ProcessedUser.get_by_id(email)
             if not user:
@@ -125,6 +132,9 @@ def generate_count_report():
                 process_error_count += error_count
                 user.error_count += error_count
             futures.append(user.put_async())
+        logging.info('Updating process counters: total [%s] ok [%s] error ['
+                     '%s]', process_total_count, process_ok_count,
+                     process_error_count)
         process.ok_count = process_ok_count
         process.error_count = process_error_count
         process.total_count = process_total_count

@@ -12,11 +12,11 @@
         {% endfor %}
     {% endif %}
 
-    {% if pipeline_url %}
+    {% if process_id %}
      <div class="alert alert-success">
         <a href="#" class="close" data-dismiss="alert">&times;</a>
-        Move Proccess saved successfully for more information
-         <strong><a href="{{pipeline_url}}">click here</a></strong>
+        Move Proccess saved successfully for more information use ID
+         <strong>{{ process_id }}</a></strong>
      </div>
     {% endif %}
 
