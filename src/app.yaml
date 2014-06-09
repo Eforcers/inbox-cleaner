@@ -4,7 +4,7 @@ version: 2014q2053-staging
 runtime: python27
 api_version: 1
 threadsafe: true
-instance_class: F4_1G
+instance_class: F1
 
 automatic_scaling:
   max_idle_instances: 5
