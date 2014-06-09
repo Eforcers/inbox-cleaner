@@ -1,0 +1,10 @@
+application: www-eicg
+
+dispatch:
+# Send all work to the one static backend.
+- url: "*/_ah/queue/deferred"
+  module: backend
+
+# Default module serves the typical web resources and all static resources.
+- url: "*/favicon.ico"
+  module: default
