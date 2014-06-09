@@ -27,26 +27,13 @@ libraries:
 - name: ssl
   version: "latest"
 
-inbound_services:
-- warmup
-
-error_handlers:
-  - file: inbox/templates/errors/default_error.html
-
-  - error_code: over_quota
-    file: inbox/templates/errors/over_quota.html
-
-  - error_code: dos_api_denial
-    file: inbox/templates/errors/dos.html
-
-  - error_code: timeout
-    file: inbox/templates/errors/timeout.html
-
-
 handlers:
 - url: /_ah/queue/deferred
   script: run.deferred_app
   login: admin
+
+- url: /_ah/pipeline(/.*)?
+  script: run.handlers._APP
 
 - url: .*
   script: run.inbox.app

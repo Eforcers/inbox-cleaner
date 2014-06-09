@@ -61,6 +61,9 @@ class MoveProcess(ndb.Model):
     status = ndb.StringProperty(choices=constants.STATUS_CHOICES)
     execution_start = ndb.DateTimeProperty(auto_now_add=True, indexed=False)
     execution_finish = ndb.DateTimeProperty(indexed=False)
+    ok_count = ndb.IntegerProperty(indexed=False)
+    error_count = ndb.IntegerProperty(indexed=False)
+    total_count = ndb.IntegerProperty(indexed=False)
 
 
 class MoveUserProcess(ndb.Model):
@@ -78,3 +81,10 @@ class MoveMessageProcess(ndb.Model):
     user_process_key = ndb.KeyProperty(MoveUserProcess, indexed=False)
     status = ndb.StringProperty(choices=constants.STATUS_CHOICES)
     error_description = ndb.StringProperty(indexed=False)
+
+
+class ProcessedUser(ndb.Model):
+    #The key ID is the email of the user, for fast retrieval
+    ok_count = ndb.IntegerProperty(indexed=False)
+    error_count = ndb.IntegerProperty(indexed=False)
+    total_count = ndb.IntegerProperty(indexed=False, repeated=True)

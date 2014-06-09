@@ -43,16 +43,6 @@ error_handlers:
     file: inbox/templates/errors/timeout.html
 
 handlers:
-- url: /_ah/pipeline(/.*)?
-  script: run.handlers._APP
-
-- url: /livecount/counter_admin
-  script: run.livecount.counter_admin.application
-  login: admin
-
-- url: /livecount/.*
-  script: run.livecount.counter.application
-  login: admin
 
 - url: /favicon.ico
   static_files: inbox/static/img/favicon.ico
@@ -68,12 +58,28 @@ handlers:
 - url: /gae_mini_profiler/.*
   script: lib.gae_mini_profiler.main.application
 
+- url: /livecount/counter_admin
+  script: run.livecount.counter_admin.application
+  login: admin
+
+- url: /livecount/.*
+  script: run.livecount.counter.application
+  login: admin
+
 - url: /static
   static_dir: inbox/static
   http_headers:
     Access-Control-Allow-Origin: http://inboxcleaner.eforcers.com
 
-#Landing is static
+#FIXME: This is processed by the backend, added here for dev app server testing
+- url: /_ah/queue/deferred
+  script: run.deferred_app
+  login: admin
+
+- url: /_ah/pipeline(/.*)?
+  script: run.handlers._APP
+
+#The landing is a static page
 - url: /
   static_files: inbox/static/html/index.html
   upload: inbox/static/html/index.html
