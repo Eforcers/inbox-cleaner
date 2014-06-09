@@ -26,10 +26,12 @@ def get_messages(user_email=None, tag=None, process_id=None):
     else:
         return []
 
-def get_messages_for_cleaning(user_email=None):
+def get_messages_for_cleaning(user_email=None, process_id=None,
+                              clean_process_key=None):
+    clean_process = clean_process_key.get()
     imap = IMAPHelper()
     imap.oauth1_2lo_login(user_email=user_email)
-    msg_ids = imap.list_messages()
+    msg_ids = imap.list_messages(criteria=clean_process.search_criteria)
     imap.close()
     if len(msg_ids) > 0:
         n = constants.MESSAGE_BATCH_SIZE
@@ -109,8 +111,12 @@ def schedule_user_move(user_email=None, tag=None, move_process_key=None):
                            chunk_ids=chunk_ids,
                            process_id=move_process_key.id())
 
-def clean_messages(user_email=None, chunk_ids=list(), retry_count=0):
-    moved_successfully = []
+def clean_message(msg_id=''):
+    logging.info("Cleaning message %s" % msg_id)
+    return True
+
+def clean_messages(user_email=None, chunk_ids=list(), retry_count=0, process_id=None):
+    cleaned_successfully = []
     if len(chunk_ids) <= 0:
         return True
     try:
@@ -118,7 +124,41 @@ def clean_messages(user_email=None, chunk_ids=list(), retry_count=0):
         imap.oauth1_2lo_login(user_email=user_email)
         imap.select()
         for message_id in chunk_ids:
-            pass
+            try:
+                result = clean_message(msg_id=message_id)
+                if result:
+                    counter.load_and_increment_counter(
+                        'cleaning_%s_ok_count' % (user_email),
+                        namespace=str(process_id))
+                    cleaned_successfully.append(message_id)
+                else:
+                    counter.load_and_increment_counter(
+                        'cleaning_%s_error_count' % user_email,
+                        namespace=str(process_id))
+                    logging.error(
+                        'Error cleaning message ID [%s] for user [%s]: [%s] ',
+                        message_id, user_email, result)
+            except Exception as e:
+                logging.exception(
+                    'Failed cleaning individual message ID [%s] for user [%s]',
+                    message_id, user_email)
+                remaining = list(set(chunk_ids) - set(cleaned_successfully))
+                if retry_count < 3:
+                    logging.info(
+                        'Scheduling [%s] remaining cleaning messages for user [%s]',
+                        len(remaining), user_email)
+                    deferred.defer(clean_messages, user_email=user_email,
+                                   chunk_ids=remaining,
+                                   process_id=process_id,
+                                   retry_count=retry_count + 1)
+                else:
+                    logging.info('Giving up with cleaning remaining [%s] messages for '
+                                 'user [%s]', len(remaining),
+                                 user_email)
+                    counter.load_and_increment_counter(
+                        'cleaning_%s_error_count' % user_email, delta=len(remaining),
+                        namespace=str(process_id))
+                break
     except Exception as e:
         logging.exception('Failed cleaning messages chunk')
         raise e
@@ -127,11 +167,12 @@ def clean_messages(user_email=None, chunk_ids=list(), retry_count=0):
             imap.close()
 
 def schedule_user_cleaning(user_email=None, clean_process_key=None):
-    for chunk_ids in get_messages(user_email=user_email):
+    for chunk_ids in get_messages_for_cleaning(
+            user_email=user_email, clean_process_key=clean_process_key):
         if len(chunk_ids) > 0:
             logging.info('Scheduling user [%s] messages cleaning', user_email)
             deferred.defer(clean_messages, user_email=user_email,
-                           chunk_ids=chunk_ids)
+                           chunk_ids=chunk_ids, process_id=clean_process_key.id())
 
 
 def generate_count_report():

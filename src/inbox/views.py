@@ -193,21 +193,3 @@ def server_error(e):
 @app.errorhandler(403)
 def unauthorized(e):
     return render_template('403.html'), 403
-
-@app.route('/labeltest/')
-def label_test():
-    from helpers import IMAPHelper
-
-    imap = IMAPHelper()
-    imap.oauth1_2lo_login('administrador@eforcers.com.co')
-    labels = imap.get_localized_labels()
-    labels = imap.all_labels
-    print labels[constants.GMAIL_ALL_KEY]
-    print labels[constants.GMAIL_TRASH_KEY]
-    imap.select(only_from_trash=True)
-    messages = imap.list_messages(only_from_trash=True)
-    print messages
-    imap.select()
-    messages = imap.list_messages()
-    print messages
-    return 'yay'
