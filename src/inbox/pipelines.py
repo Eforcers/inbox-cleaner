@@ -9,7 +9,7 @@ from livecount import counter
 import pipeline
 from pipeline.common import List
 from models import MoveProcess, MoveUserProcess
-from tasks import get_messages, move_message
+from tasks import get_messages
 
 
 class MoveProcessPipeline(pipeline.Pipeline):
