@@ -10,32 +10,56 @@
     {% block new_process_form %}
     {% endblock new_process_form %}
     <div class="row">
-        <h1 id="">inboxs</h1>
+        <h1 id="">Processes List</h1>
         <div>&nbsp;</div>
         <table class="table table-bordered table-striped">
             <thead>
                 <tr>
                     <th>Name</th>
-                    <th>Birthday</th>
-                    <th>&nbsp;</th>
+                    <th>Source email</th>
+                    <th>Destination message email</th>
+                    <th>Search criteria</th>
+                    <th>Status</th>
                 </tr>
             </thead>
             <tbody>
-                {% for birthday in birthdays %}
-                {% set birthday_id = birthday.key.id() %}
+                {% for clean_process in clean_processes %}
                 <tr>
-
-                    <td>{{ birthday.display_name }}</td>
-                    <td class="nowrap">{{ birthday.timestamp.strftime('%b %d, %Y %I:%M %p') }}</td>
-                    <td>
-                        <a href="{{ url_for('edit_birthday', birthday_id=birthday_id) }}" class="btn">Edit</a>
-                    </td>
+                    <td>{{ clean_process.process_name }}</td>
+                    <td>{{ clean_process.source_email }}</td>
+                    <td>{{ clean_process.destination_message_email }}</td>
+                    <td>{{ clean_process.search_criteria }}</td>
+                    <td>{{ clean_process.status }}</td>
                 </tr>
                 {% else %}
-                <tr><td colspan="7">No birthdays yet</td></tr>
+                <tr><td colspan="7">No processes yet</td></tr>
                 {% endfor %}
             </tbody>
         </table>
+        {{curs}}
+        <ul class="pager">
+            {%if prev_curs %}
+            <li style="cursor: pointer">
+                <a href="{{url_for('list_process')}}?prev=true&cursor={{prev_curs}}">
+                    previous
+                </a>
+            </li>
+            {% endif %}
+            <li style="cursor: pointer">
+                <a href="{{url_for('list_process')}}">
+                    home
+                </a>
+            </li>
+            {%if next_curs %}
+            <li style="cursor: pointer">
+                <a href="{{url_for('list_process')}}?cursor={{next_curs}}">
+                    next
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+
+
     </div>
 
 {% endblock content %}

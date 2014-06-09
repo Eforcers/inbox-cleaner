@@ -15,6 +15,7 @@ ENVIRONMENT_CHOICES = [
     ENV_DEVELOPMENT,
     ENV_TESTING,
 ]
+PAGE_SIZE = 20
 
 EMAIL_REGEXP = "^[a-zA-Z0-9'._-]+@[a-zA-Z0-9._-]+.[a-zA-Z]{2,6}$"
 
