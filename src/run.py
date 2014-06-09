@@ -6,3 +6,4 @@ import inbox
 
 from pipeline import handlers
 import livecount
+from google.appengine.ext.deferred import application as deferred_app
