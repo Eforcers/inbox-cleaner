@@ -119,11 +119,12 @@ class IMAPHelper:
         self.select(only_from_trash=only_from_trash)
         query = ' '
         if only_with_attachments:
-            query += 'has:attachment %s ' % criteria
+            query += 'has:attachment '
 
         if only_from_trash:
             query += 'in:trash '
 
+        query += '%s ' % criteria
         result, data = self.mail_connection.uid('search', None,
                                                 r'(X-GM-RAW "%s")' % query)
 
@@ -181,3 +182,7 @@ class IMAPHelper:
         result, data = self.mail_connection.uid('FETCH', msg_id, 'X-GM-LABELS')
         return result, data
 
+    def delete_message(self, msg_id=None):
+        self.mail_connection.uid('COPY', msg_id,
+                             self.all_labels[constants.GMAIL_TRASH_KEY])
+        self.mail_connection.expunge()
