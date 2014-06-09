@@ -62,6 +62,14 @@ def warmup():
     return ''
 
 
+@app.route('/_ah/start')
+def start():
+    """App Engine start backend handler
+
+    """
+    return ''
+
+
 @app.route('/')
 def index():
     return 'Landing Page'

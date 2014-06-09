@@ -89,7 +89,6 @@ class IMAPHelper:
         logging.info('IMAP connection [%s] successfully established',
                      user_email)
 
-
     def login(self, email, password):
         logging.info("Connecting to IMAP server with user [%s]", email)
         result, data = self.mail_connection.login(email, password)
@@ -97,10 +96,13 @@ class IMAPHelper:
 
     def close(self):
         logging.info('IMAP connection state: %s', self.mail_connection.state)
-        if self.mail_connection.state == 'SELECTED':
-            self.mail_connection.close()
-        self.mail_connection.logout()
-        logging.info('IMAP connection sucessfully closed')
+        try:
+            if self.mail_connection.state == 'SELECTED':
+                self.mail_connection.close()
+            self.mail_connection.logout()
+            logging.info('IMAP connection sucessfully closed')
+        except:
+            logging.exception('Error closing the connection')
 
     def list_messages(self, criteria='', only_with_attachments=False,
                       only_from_trash=False):
