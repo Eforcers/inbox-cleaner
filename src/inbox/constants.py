@@ -15,6 +15,7 @@ ENVIRONMENT_CHOICES = [
     ENV_DEVELOPMENT,
     ENV_TESTING,
 ]
+PAGE_SIZE = 20
 
 EMAIL_REGEXP = "^[a-zA-Z0-9'._-]+@[a-zA-Z0-9._-]+.[a-zA-Z]{2,6}$"
 
@@ -26,6 +27,10 @@ MENU_ITEMS = [
 
 IMAP_SERVER = 'imap.gmail.com'
 IMAP_PORT = 993
+IMAP_ALL_LABEL_ES = '[Gmail]/Todos'
+IMAP_ALL_LABEL_EN = '[Gmail]/All Mail'
+IMAP_TRASH_LABEL_EN = '[Gmail]/Trash'
+IMAP_TRASH_LABEL_ES = '[Gmail]/Papelera'
 
 IMAP_ALL_LABEL_ES = '[Gmail]/Todos'
 IMAP_ALL_LABEL_EN = '[Gmail]/All Mail'

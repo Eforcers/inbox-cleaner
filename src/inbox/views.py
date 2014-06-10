@@ -13,6 +13,7 @@ import logging
 
 from google.appengine.api import users
 from google.appengine.api.datastore_errors import BadValueError
+from google.appengine.datastore.datastore_query import Cursor
 from google.appengine.ext import deferred
 
 from helpers import OAuthDanceHelper, DirectoryHelper
@@ -25,6 +26,12 @@ from forms import CleanUserProcessForm, MoveProssessForm
 from models import CleanUserProcess, MoveProcess
 
 # Flask-Cache (configured to use App Engine Memcache API)
+from inbox.forms import CleanUserProcessForm, MoveProssessForm
+from inbox.models import CleanUserProcess, MoveProcess
+from inbox.pipelines import MoveProcessPipeline
+from inbox.tasks import schedule_user_move
+
+from google.appengine.ext import deferred
 cache = Cache(app)
 
 
@@ -119,6 +126,10 @@ def list_process():
     form = CleanUserProcessForm()
     user = users.get_current_user()
     clean_process_saved = False
+
+    clean_processes = []
+    clean_process_query = CleanUserProcess.query().order()
+    query_params = {}
     if request.method == 'POST':
         if form.validate_on_submit():
             clean_user_process = CleanUserProcess(
@@ -128,12 +139,38 @@ def list_process():
             )
             for key, value in form.data.iteritems():
                 setattr(clean_user_process, key, value)
-            clean_user_process.put()
+            clean_process_key = clean_user_process.put()
             clean_process_saved = True
+            #TODO: process does not appears immediately after it's saved
             # launch Pipeline
+            deferred.defer(schedule_user_cleaning, user_email=user.email(),
+                           clean_process_key=clean_process_key)
+
+    is_prev = request.args.get('prev', False)
+    url_cursor = request.args.get('cursor', None)
+    cursor = Cursor(urlsafe=url_cursor) if url_cursor else None
+
+    if is_prev:
+        clean_process_query = clean_process_query.order(CleanUserProcess.created)
+        cursor = cursor.reversed()
+    else:
+        clean_process_query = clean_process_query.order(-CleanUserProcess.created)
+
+    data, next_curs, more = clean_process_query.fetch_page(
+        constants.PAGE_SIZE, start_cursor=cursor)
+    clean_processes.extend(data)
+
+    if is_prev:
+        prev_curs = next_curs.reversed().urlsafe() if more else None
+        next_curs = url_cursor
+    else:
+        prev_curs = url_cursor
+        next_curs = next_curs.urlsafe() if more else None
 
     return render_template('process.html', form=form, user=user.email(),
-                           clean_process_saved=clean_process_saved)
+                           clean_process_saved=clean_process_saved,
+                           clean_processes=clean_processes, next_curs=next_curs,
+                           more=more, prev_curs=prev_curs)
 
 
 @app.route('/process/move', methods=['GET', 'POST'])

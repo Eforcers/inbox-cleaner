@@ -144,21 +144,35 @@ class IMAPHelper:
         self.mail_connection.create(new_label)
 
     def select(self, only_from_trash=False):
+        self.get_localized_labels()
+        main_label = ''
+
         if only_from_trash:
-            en_label = constants.IMAP_TRASH_LABEL_EN
-            es_label = constants.IMAP_TRASH_LABEL_ES
+            if constants.GMAIL_TRASH_KEY in self.all_labels:
+                main_label = self.all_labels[constants.GMAIL_TRASH_KEY]
+            else:
+                en_label = constants.IMAP_TRASH_LABEL_EN
+                es_label = constants.IMAP_TRASH_LABEL_ES
         else:
-            en_label = constants.IMAP_ALL_LABEL_EN
-            es_label = constants.IMAP_ALL_LABEL_ES
-        result, data = self.mail_connection.select(es_label)
-        # Try in english if not found in spanish
-        if result != 'OK':
-            result, data = self.mail_connection.select(en_label)
+            if constants.GMAIL_ALL_KEY in self.all_labels:
+                main_label = self.all_labels[constants.GMAIL_ALL_KEY]
+            else:
+                en_label = constants.IMAP_ALL_LABEL_EN
+                es_label = constants.IMAP_ALL_LABEL_ES
+
+        if main_label != '':
+            result, data = self.mail_connection.select(main_label)
+        else:
+            result, data = self.mail_connection.select(es_label)
+            # Try in english if not found in spanish
             if result != 'OK':
-                # Maybe configured in another language or label name is wrong
-                logging.error("Unable to get count for all label. %s [%s]",
-                              result, data)
-                return None, None
+                result, data = self.mail_connection.select(en_label)
+
+        if result != 'OK':
+            # Maybe configured in another language or label name is wrong
+            logging.error("Unable to get count for all label. %s [%s]",
+                          result, data)
+            return None, None
         return result, data
 
     def copy_message(self, msg_id=None, destination_label=None, only_from_trash=False):
