@@ -123,8 +123,11 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
                         namespace=str(process_id))
                 break
     except Exception as e:
-        logging.exception('Failed moving messages chunk')
-        raise e
+        logging.exception('Authentication, connection or select problem for '
+                          'user [%s]', user_email)
+        counter.load_and_increment_counter(
+                        '%s_error_count' % user_email, delta=len(chunk_ids),
+                        namespace=str(process_id))
     finally:
         if imap:
             imap.close()
