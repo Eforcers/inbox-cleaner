@@ -13,21 +13,19 @@ import logging
 
 from google.appengine.api import users
 from google.appengine.api.datastore_errors import BadValueError
+from google.appengine.datastore.datastore_query import Cursor
+from google.appengine.ext import deferred
 
 from helpers import OAuthDanceHelper, DirectoryHelper
 from flask import request, render_template, url_for, redirect, abort, g
 from flask_cache import Cache
 from inbox import app, constants
 from decorators import login_required
-
+from tasks import generate_count_report, schedule_user_move
+from forms import CleanUserProcessForm, MoveProssessForm
+from models import CleanUserProcess, MoveProcess
 
 # Flask-Cache (configured to use App Engine Memcache API)
-from inbox.forms import CleanUserProcessForm, MoveProssessForm
-from inbox.models import CleanUserProcess, MoveProcess
-from inbox.pipelines import MoveProcessPipeline
-from inbox.tasks import schedule_user_move
-
-from google.appengine.ext import deferred
 cache = Cache(app)
 
 
@@ -64,8 +62,7 @@ def warmup():
 
 @app.route('/_ah/start')
 def start():
-    """App Engine start backend handler
-
+    """App Engine start handler
     """
     return ''
 
@@ -76,6 +73,7 @@ def index():
 
 
 @app.route('/admin')
+@app.route('/admin/')
 def admin_index():
     return redirect(url_for('list_process'))
 
@@ -123,6 +121,10 @@ def list_process():
     form = CleanUserProcessForm()
     user = users.get_current_user()
     clean_process_saved = False
+
+    clean_processes = []
+    clean_process_query = CleanUserProcess.query().order()
+    query_params = {}
     if request.method == 'POST':
         if form.validate_on_submit():
             clean_user_process = CleanUserProcess(
@@ -132,12 +134,38 @@ def list_process():
             )
             for key, value in form.data.iteritems():
                 setattr(clean_user_process, key, value)
-            clean_user_process.put()
+            clean_process_key = clean_user_process.put()
             clean_process_saved = True
+            #TODO: process does not appears immediately after it's saved
             # launch Pipeline
+            deferred.defer(schedule_user_cleaning, user_email=user.email(),
+                           clean_process_key=clean_process_key)
+
+    is_prev = request.args.get('prev', False)
+    url_cursor = request.args.get('cursor', None)
+    cursor = Cursor(urlsafe=url_cursor) if url_cursor else None
+
+    if is_prev:
+        clean_process_query = clean_process_query.order(CleanUserProcess.created)
+        cursor = cursor.reversed()
+    else:
+        clean_process_query = clean_process_query.order(-CleanUserProcess.created)
+
+    data, next_curs, more = clean_process_query.fetch_page(
+        constants.PAGE_SIZE, start_cursor=cursor)
+    clean_processes.extend(data)
+
+    if is_prev:
+        prev_curs = next_curs.reversed().urlsafe() if more else None
+        next_curs = url_cursor
+    else:
+        prev_curs = url_cursor
+        next_curs = next_curs.urlsafe() if more else None
 
     return render_template('process.html', form=form, user=user.email(),
-                           clean_process_saved=clean_process_saved)
+                           clean_process_saved=clean_process_saved,
+                           clean_processes=clean_processes, next_curs=next_curs,
+                           more=more, prev_curs=prev_curs)
 
 
 @app.route('/process/move', methods=['GET', 'POST'])
@@ -145,11 +173,12 @@ def list_process():
 def move_process():
     form = MoveProssessForm()
     user = users.get_current_user()
-    pipeline_url = ''
+    process_id = None
     if request.method == 'POST':
         if form.validate_on_submit():
             try:
-                move_process = MoveProcess()
+                move_process = MoveProcess(ok_count=0, error_count=0,
+                                           total_count=0)
                 emails = list(set([
                     email.strip() for email in form.data['emails']
                         .splitlines()]))
@@ -158,8 +187,10 @@ def move_process():
                     move_process.tag = form.data['tag']
                     move_process_key = move_process.put()
                     for email in emails:
-                        deferred.defer(schedule_user_move, user_email=email, tag=move_process.tag, move_process_key=move_process_key)
-                    pipeline_url = 'http://appengine.google.com'
+                        deferred.defer(schedule_user_move, user_email=email,
+                                       tag=move_process.tag,
+                                       move_process_key=move_process_key)
+                    process_id = move_process_key.id()
                 else:
                     form.errors['Emails'] = ['Emails should not be empty']
             except BadValueError, e:
@@ -167,7 +198,13 @@ def move_process():
                 form.errors['Emails'] = ['Emails are malformed']
 
     return render_template('move_process.html', form=form, user=user.email(),
-                           pipeline_url=pipeline_url)
+                           process_id=process_id)
+
+
+@app.route('/cron/process/count')
+def count_report():
+    deferred.defer(generate_count_report)
+    return 'Count report is being generated...'
 
 
 # # Error handlers
@@ -187,30 +224,3 @@ def server_error(e):
 @app.errorhandler(403)
 def unauthorized(e):
     return render_template('403.html'), 403
-
-
-@app.route('/imaptest/')
-def list_messages():
-    from helpers import IMAPHelper
-    from secret_keys import TEST_LOGIN, TEST_PASS
-
-    imap = IMAPHelper()
-    imap.login(TEST_LOGIN, TEST_PASS)
-    print imap.list_messages()
-    return render_template('base.html')
-
-
-@app.route('/imapmovetest/')
-def move_message():
-    from helpers import IMAPHelper
-
-    imap = IMAPHelper()
-    imap.oauth1_2lo_login('prueba44@david.eforcers.com.co')
-    messages = imap.list_messages(only_from_trash=True)
-    print messages
-    imap.create_label('prueba 2')
-    if len(messages) > 0:
-        for i, m in enumerate(messages):
-            imap.copy_message(msg_id=messages[i], destination_label='prueba 2')
-    imap.close()
-    return render_template('base.html')

@@ -10,15 +10,18 @@
     {% block new_process_form %}
     {% endblock new_process_form %}
     <div class="row">
+        
         <div style="margin-top:60px" class="col-md-12">
-        <h1 id="">Inboxs</h1>
+        <h1 id="processes-list">Processes List</h1>
         <div>&nbsp;</div>
         <table class="table table-bordered table-striped">
             <thead>
                 <tr>
                     <th>Name</th>
-                    <th>Birthday</th>
-                    <th>New Process<span style="float: right" class="glyphicon glyphicon-cloud-upload"></span></th>
+                    <th>Source email</th>
+                    <th>Destination message email</th>
+                    <th>Search criteria</th>
+                    <th>Status</th>
                 </tr>
             </thead>
             <tbody>
@@ -37,6 +40,30 @@
                 {% endfor %}
             </tbody>
         </table>
+        {{curs}}
+        <ul class="pager">
+            {%if prev_curs %}
+            <li id="prev-id" style="cursor: pointer">
+                <a href="{{url_for('list_process')}}?prev=true&cursor={{prev_curs}}">
+                    previous
+                </a>
+            </li>
+            {% endif %}
+            <li id="home-id" style="cursor: pointer">
+                <a href="{{url_for('list_process')}}">
+                    home
+                </a>
+            </li>
+            {%if next_curs %}
+            <li id="next-id" style="cursor: pointer">
+                <a href="{{url_for('list_process')}}?cursor={{next_curs}}">
+                    next
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+
+
        </div>
     </div>
 

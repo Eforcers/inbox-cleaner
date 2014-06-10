@@ -1,8 +1,11 @@
 application: www-eicg
 
 dispatch:
-# Send all work to the one static backend.
+# Send all long running work to the backend instances.
 - url: "*/_ah/queue/deferred"
+  module: backend
+
+- url: "*/_ah/pipeline*"
   module: backend
 
 # Default module serves the typical web resources and all static resources.

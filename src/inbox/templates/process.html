@@ -31,7 +31,7 @@
     {% if clean_process_saved %}
      <div class="alert alert-success">
         <a href="#" class="close" data-dismiss="alert">&times;</a>
-        Proccess save successfully
+        Process saved successfully please reloaded to see it
      </div>
     {% endif %}
 
@@ -97,7 +97,8 @@
 
             <div class="form-group">
                 <div class="col-sm-offset-2 col-sm-10" style="margin-top: 10px;">
-                    <button class="btn btn-primary" type="submit">
+                    <button id='add-process-button' class="btn btn-primary"
+                            type="submit">
                         Add Process
                     </button>
                     <button class="btn"  type="reset" data-dismiss="modal">
