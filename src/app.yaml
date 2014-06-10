@@ -7,7 +7,7 @@ threadsafe: true
 instance_class: F1
 
 automatic_scaling:
-  max_idle_instances: 15
+  max_idle_instances: 10
   min_pending_latency: 1s
 
 default_expiration: "5d"
