@@ -11,7 +11,10 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from google.appengine.ext.remote_api import remote_api_stub
+from inbox import constants
+from inbox.models import CleanUserProcess
 import secret_keys
+import fixtures
 
 
 class LocalSeleniumTestCase(unittest.TestCase):
@@ -59,19 +62,6 @@ class LocalSeleniumTestCase(unittest.TestCase):
         self.driver.find_element_by_id('submit-login').click()
         self.driver.get(self.base_url + url)
 
-    def initialize_default_datastore(self):
-        time.sleep(3)
-
-        def auth_func():
-            return (secret_keys.ADMIN_USERNAME, secret_keys.ADMIN_PASSWORD)
-
-        remote_api_stub.ConfigureRemoteApi(
-            None,
-            '/_ah/remote_api',
-            auth_func,
-            '%s:%s' % (self.SERVER_NAME, self.SERVER_PORT)
-        )
-
     #----------------------------assert section -------------------------------
 
     def assert_element_visible(self, how, what, message):
@@ -93,13 +83,64 @@ class LocalSeleniumTestCase(unittest.TestCase):
     #------------------------bussines logic section ---------------------------
     def test_list(self):
         driver = self.driver
-        #self.initialize_default_datastore()
-
-
+        fixtures.add_example_clean_process_users(amount=45)
         self.default_login('/process')
-        self.assert_element_visible(By.ID,'processes-list','Process list '
-                                                           'title does not '
-                                                           'appears')
+        self.assert_element_visible(
+            By.ID,'processes-list','Process list title does not appears')
+
+        td_list1 = [td.text for td in driver.find_elements_by_xpath(
+            '//*[@id="process-list"]/tbody/tr/td[1]')]
+        self.assertEquals(constants.PAGE_SIZE, len(td_list1),'list len does '
+                                                            'not match')
+        self.assert_element_invisible(By.ID,'prev-id','button appears')
+        self.assert_element_visible(By.ID,'home-id','button does not appear')
+        self.assert_element_visible(By.ID,'next-id','button does not '
+                                                    'appear').click()
+
+        td_list2 = [td.text for td in driver.find_elements_by_xpath(
+            '//*[@id="process-list"]/tbody/tr/td[1]')]
+        self.assertEquals(constants.PAGE_SIZE, len(td_list2),'list len does '
+                                                            'not match')
+        self.assert_element_visible(By.ID,'prev-id','button appears')
+        self.assert_element_visible(By.ID,'home-id','button does not appear')
+        self.assert_element_visible(By.ID,'next-id','button does not '
+                                                    'appear').click()
+        self.assertNotEqual(set(td_list1),set(td_list2))
+
+        td_list3 = [td.text for td in driver.find_elements_by_xpath(
+            '//*[@id="process-list"]/tbody/tr/td[1]')]
+        self.assertLess(len(td_list3),constants.PAGE_SIZE)
+
+        self.assert_element_invisible(By.ID,'next-id','button does not appear')
+        self.assert_element_visible(By.ID,'home-id','button does not appear')
+        self.assert_element_visible(By.ID,'prev-id','button appears').click()
+        self.assertNotEqual(set(td_list2),set(td_list3))
+
+        td_list4 = [td.text for td in driver.find_elements_by_xpath(
+            '//*[@id="process-list"]/tbody/tr/td[1]')]
+        self.assertEquals(constants.PAGE_SIZE, len(td_list4),'list len does '
+                                                            'not match')
+        self.assertEquals(set(td_list2),set(td_list4))
+
+    def test_create(self):
+        driver = self.driver
+        self.default_login('/process')
+        driver.find_element_by_id('process_name').send_keys('process1')
+        driver.find_element_by_id('source_email').send_keys('test')
+        driver.find_element_by_id('source_password').send_keys('source_password')
+        driver.find_element_by_id('search_criteria').send_keys('search_criteria')
+        driver.find_element_by_id('add-process-button').click()
+        self.assert_element_invisible(By.CLASS_NAME, 'alert-success','object '
+                                                                     'appears')
+
+        driver.find_element_by_id('source_email').send_keys('test@test.com')
+        driver.find_element_by_id('add-process-button').click()
+        self.assert_element_visible(By.CLASS_NAME, 'alert-success','Object '
+                                                                   'does not '
+                                                                   'appears')
+        td_list1 = [td.text for td in driver.find_elements_by_xpath(
+            '//*[@id="process-list"]/tbody/tr/td[1]')]
+        self.assertEquals(1, len(td_list1),'list len does not match')
 
 if __name__ == '__main__':
     unittest.main()
