@@ -21,17 +21,11 @@ from flask import request, render_template, url_for, redirect, abort, g
 from flask_cache import Cache
 from inbox import app, constants
 from decorators import login_required
+from tasks import generate_count_report, schedule_user_move
 from forms import CleanUserProcessForm, MoveProssessForm
 from models import CleanUserProcess, MoveProcess
-from tasks import schedule_user_move, generate_count_report
 
 # Flask-Cache (configured to use App Engine Memcache API)
-from inbox.forms import CleanUserProcessForm, MoveProssessForm
-from inbox.models import CleanUserProcess, MoveProcess
-from inbox.pipelines import MoveProcessPipeline
-from inbox.tasks import schedule_user_move
-
-from google.appengine.ext import deferred
 cache = Cache(app)
 
 
@@ -62,6 +56,13 @@ def warmup():
     """App Engine warmup handler
     See http://code.google.com/appengine/docs/python/config/appconfig.html#Warming_Requests
 
+    """
+    return ''
+
+
+@app.route('/_ah/start')
+def start():
+    """App Engine start handler
     """
     return ''
 
@@ -133,10 +134,12 @@ def list_process():
             )
             for key, value in form.data.iteritems():
                 setattr(clean_user_process, key, value)
-            clean_user_process.put()
+            clean_process_key = clean_user_process.put()
             clean_process_saved = True
             #TODO: process does not appears immediately after it's saved
             # launch Pipeline
+            deferred.defer(schedule_user_cleaning, user_email=user.email(),
+                           clean_process_key=clean_process_key)
 
     is_prev = request.args.get('prev', False)
     url_cursor = request.args.get('cursor', None)
@@ -170,7 +173,7 @@ def list_process():
 def move_process():
     form = MoveProssessForm()
     user = users.get_current_user()
-    pipeline_url = ''
+    process_id = None
     if request.method == 'POST':
         if form.validate_on_submit():
             try:
@@ -187,7 +190,7 @@ def move_process():
                         deferred.defer(schedule_user_move, user_email=email,
                                        tag=move_process.tag,
                                        move_process_key=move_process_key)
-                    pipeline_url = 'http://appengine.google.com'
+                    process_id = move_process_key.id()
                 else:
                     form.errors['Emails'] = ['Emails should not be empty']
             except BadValueError, e:
@@ -195,7 +198,7 @@ def move_process():
                 form.errors['Emails'] = ['Emails are malformed']
 
     return render_template('move_process.html', form=form, user=user.email(),
-                           pipeline_url=pipeline_url)
+                           process_id=process_id)
 
 
 @app.route('/cron/process/count')
