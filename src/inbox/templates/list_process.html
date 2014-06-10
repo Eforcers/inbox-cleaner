@@ -10,9 +10,9 @@
     {% block new_process_form %}
     {% endblock new_process_form %}
     <div class="row">
-        <h1 id="">Processes List</h1>
+        <h1 id="processes-list">Processes List</h1>
         <div>&nbsp;</div>
-        <table class="table table-bordered table-striped">
+        <table class="table table-bordered table-striped" id="process-list">
             <thead>
                 <tr>
                     <th>Name</th>
@@ -39,19 +39,19 @@
         {{curs}}
         <ul class="pager">
             {%if prev_curs %}
-            <li style="cursor: pointer">
+            <li id="prev-id" style="cursor: pointer">
                 <a href="{{url_for('list_process')}}?prev=true&cursor={{prev_curs}}">
                     previous
                 </a>
             </li>
             {% endif %}
-            <li style="cursor: pointer">
+            <li id="home-id" style="cursor: pointer">
                 <a href="{{url_for('list_process')}}">
                     home
                 </a>
             </li>
             {%if next_curs %}
-            <li style="cursor: pointer">
+            <li id="next-id" style="cursor: pointer">
                 <a href="{{url_for('list_process')}}?cursor={{next_curs}}">
                     next
                 </a>
