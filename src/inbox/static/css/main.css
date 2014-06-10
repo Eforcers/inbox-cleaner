@@ -6,3 +6,13 @@
 .nowrap { white-space: nowrap; }
 
 /* Your customizations here */
+body {
+    background-color:#F1F0EF;
+}
+.col-md-12 {
+    background-color:#ffffff;
+}
+.row{
+    margin-top: -10px;
+    height: 200px;
+}

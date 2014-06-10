@@ -10,14 +10,15 @@
     {% block new_process_form %}
     {% endblock new_process_form %}
     <div class="row">
-        <h1 id="">inboxs</h1>
+        <div style="margin-top:60px" class="col-md-12">
+        <h1 id="">Inboxs</h1>
         <div>&nbsp;</div>
         <table class="table table-bordered table-striped">
             <thead>
                 <tr>
                     <th>Name</th>
                     <th>Birthday</th>
-                    <th>&nbsp;</th>
+                    <th>New Process<span style="float: right" class="glyphicon glyphicon-cloud-upload"></span></th>
                 </tr>
             </thead>
             <tbody>
@@ -36,6 +37,8 @@
                 {% endfor %}
             </tbody>
         </table>
+       </div>
     </div>
+
 
 {% endblock content %}

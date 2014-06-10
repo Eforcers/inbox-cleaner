@@ -1,8 +1,24 @@
+<div class="row">
+    <div style="margin-top: -80px" class="col-md-12">
+        <div class="col-xs-6"><img style="padding-left:200px;padding-top:110px;" src="/static/img/logo-01.png" alt="logo" class="img-rounded"></img></div>
+        <div class="col-xs-6"><img style="padding-left:200px;padding-top:70px;" src="/static/img/sobre-01.jpg" alt="logo" class="img-rounded"></img></div>
+    </div>
+</div>
+<div class="row">
+    <div class="col-md-6 btn-toolbar" role="toolbar">
+  <button style="margin-top: 70px; float: right;" type="button" class="btn btn-default btn-lg">
+    <span class="glyphicon glyphicon-cloud-upload"></span> New Process
+  </button>
+    </div>
+    <div class="col-md-6"><button style="margin-top: 70px" class="btn btn-info btn-lg"  role="button">User Guide</button></div>
+
+</div>
+
 {% extends "list_process.html" %}
 
 {% block new_process_form %}
 <div id="new-process-div" class="row">
-    <h1 >New Process</h1>
+    <h1 style="margin-left:13px">New Process</h1>
     {% if form.errors %}
         {% for key, value in form.errors.iteritems() %}
         <div class="alert alert-danger">
@@ -34,6 +50,7 @@
                        type="text" required/>
                 </div>
             </div>
+            <hr>
             <div class="form-group">
                 <label for="source_email" class="col-sm-2 control-label">
                     Source Email
@@ -90,6 +107,8 @@
             </div>
 
     </form>
+
 </div>
 
 {% endblock new_process_form %}
+
