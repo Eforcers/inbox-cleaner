@@ -39,7 +39,7 @@ class CleanUserProcess(ndb.Model):
     destination_message_email = ndb.StringProperty(required=True,
                                                    validator=validate_email,
                                                    indexed=False)
-    search_criteria = ndb.StringProperty(required=True)
+    search_criteria = ndb.StringProperty(indexed=False)
     pipeline_id = ndb.IntegerProperty(indexed=False)
     status = ndb.StringProperty()
     created = ndb.DateTimeProperty(auto_now_add=True)
