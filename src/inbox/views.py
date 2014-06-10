@@ -72,6 +72,7 @@ def index():
 
 
 @app.route('/admin')
+@app.route('/admin/')
 def admin_index():
     return redirect(url_for('list_process'))
 
