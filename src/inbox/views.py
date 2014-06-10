@@ -26,12 +26,6 @@ from forms import CleanUserProcessForm, MoveProssessForm
 from models import CleanUserProcess, MoveProcess
 
 # Flask-Cache (configured to use App Engine Memcache API)
-from inbox.forms import CleanUserProcessForm, MoveProssessForm
-from inbox.models import CleanUserProcess, MoveProcess
-from inbox.pipelines import MoveProcessPipeline
-from inbox.tasks import schedule_user_move
-
-from google.appengine.ext import deferred
 cache = Cache(app)
 
 

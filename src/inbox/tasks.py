@@ -22,7 +22,7 @@ def get_messages(user_email=None, tag=None, process_id=None):
             msg_ids = imap.list_messages(only_from_trash=True)
         except:
             logging.exception('Error creating label or retrieving messages for '
-                          'user [%s]', user_email)
+                              'user [%s]', user_email)
             return []
     except:
         logging.exception('Authentication or connection problem for user '
@@ -31,15 +31,15 @@ def get_messages(user_email=None, tag=None, process_id=None):
     finally:
         if imap:
             imap.close()
-    #Assuming IMAP connection was OK
+    # Assuming IMAP connection was OK
     if len(msg_ids) > 0:
         n = constants.MESSAGE_BATCH_SIZE
         counter.load_and_increment_counter('%s_total_count' % user_email,
                                            delta=len(msg_ids),
                                            namespace=str(process_id))
         return [msg_ids[i::n] for i in xrange(n)]
-    else:
-        return []
+    return []
+
 
 def get_messages_for_cleaning(user_email=None, process_id=None,
                               clean_process_key=None):
@@ -50,9 +50,10 @@ def get_messages_for_cleaning(user_email=None, process_id=None,
     imap.close()
     if len(msg_ids) > 0:
         n = constants.MESSAGE_BATCH_SIZE
-        counter.load_and_increment_counter('cleaning_%s_total_count' % user_email,
-                                           delta=len(msg_ids),
-                                           namespace=str(process_id))
+        counter.load_and_increment_counter(
+            'cleaning_%s_total_count' % user_email,
+            delta=len(msg_ids),
+            namespace=str(process_id))
         return [msg_ids[i::n] for i in xrange(n)]
     else:
         return []
@@ -127,11 +128,14 @@ def schedule_user_move(user_email=None, tag=None, move_process_key=None):
                            chunk_ids=chunk_ids,
                            process_id=move_process_key.id())
 
+
 def clean_message(msg_id=''):
     logging.info("Cleaning message %s" % msg_id)
     return True
 
-def clean_messages(user_email=None, chunk_ids=list(), retry_count=0, process_id=None):
+
+def clean_messages(user_email=None, chunk_ids=list(), retry_count=0,
+                   process_id=None):
     cleaned_successfully = []
     if len(chunk_ids) <= 0:
         return True
@@ -168,11 +172,13 @@ def clean_messages(user_email=None, chunk_ids=list(), retry_count=0, process_id=
                                    process_id=process_id,
                                    retry_count=retry_count + 1)
                 else:
-                    logging.info('Giving up with cleaning remaining [%s] messages for '
-                                 'user [%s]', len(remaining),
-                                 user_email)
+                    logging.info(
+                        'Giving up with cleaning remaining [%s] messages for '
+                        'user [%s]', len(remaining),
+                        user_email)
                     counter.load_and_increment_counter(
-                        'cleaning_%s_error_count' % user_email, delta=len(remaining),
+                        'cleaning_%s_error_count' % user_email,
+                        delta=len(remaining),
                         namespace=str(process_id))
                 break
     except Exception as e:
@@ -182,13 +188,15 @@ def clean_messages(user_email=None, chunk_ids=list(), retry_count=0, process_id=
         if imap:
             imap.close()
 
+
 def schedule_user_cleaning(user_email=None, clean_process_key=None):
     for chunk_ids in get_messages_for_cleaning(
             user_email=user_email, clean_process_key=clean_process_key):
         if len(chunk_ids) > 0:
             logging.info('Scheduling user [%s] messages cleaning', user_email)
             deferred.defer(clean_messages, user_email=user_email,
-                           chunk_ids=chunk_ids, process_id=clean_process_key.id())
+                           chunk_ids=chunk_ids,
+                           process_id=clean_process_key.id())
 
 
 def generate_count_report():
@@ -200,10 +208,6 @@ def generate_count_report():
         process_ok_count = 0
         process_error_count = 0
         process_total_count = 0
-        if process.total_count and process.total_count != 0:
-            logging.info('Process [%s] counters already calculated',
-                         process.key.id())
-            continue
         for email in process.emails:
             user = ProcessedUser.get_by_id(email)
             if not user:
