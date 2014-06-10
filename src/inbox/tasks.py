@@ -10,13 +10,28 @@ from livecount import counter
 
 
 def get_messages(user_email=None, tag=None, process_id=None):
-    imap = IMAPHelper()
-    imap.oauth1_2lo_login(user_email=user_email)
-    if tag:
-        logging.info('Creating label [%s]', tag)
-        imap.create_label(tag)
-    msg_ids = imap.list_messages(only_from_trash=True)
-    imap.close()
+    imap = None
+    msg_ids = []
+    try:
+        imap = IMAPHelper()
+        imap.oauth1_2lo_login(user_email=user_email)
+        try:
+            if tag:
+                logging.info('Creating label [%s]', tag)
+                imap.create_label(tag)
+            msg_ids = imap.list_messages(only_from_trash=True)
+        except:
+            logging.exception('Error creating label or retrieving messages for '
+                          'user [%s]', user_email)
+            return []
+    except:
+        logging.exception('Authentication or connection problem for user '
+                          '[%s]', user_email)
+        return []
+    finally:
+        if imap:
+            imap.close()
+    #Assuming IMAP connection was OK
     if len(msg_ids) > 0:
         n = constants.MESSAGE_BATCH_SIZE
         counter.load_and_increment_counter('%s_total_count' % user_email,

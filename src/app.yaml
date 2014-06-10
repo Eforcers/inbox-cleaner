@@ -1,13 +1,13 @@
 application: www-eicg
 module: default
-version: 2014q2053-staging
+version: 2014q2053
 runtime: python27
 api_version: 1
 threadsafe: true
 instance_class: F1
 
 automatic_scaling:
-  max_idle_instances: 5
+  max_idle_instances: 15
   min_pending_latency: 1s
 
 default_expiration: "5d"
