@@ -5,8 +5,11 @@ from google.appengine.ext import deferred
 
 from helpers import IMAPHelper
 import constants
-from inbox.models import ProcessedUser, MoveProcess
+from inbox.models import ProcessedUser, MoveProcess, CleanUserProcess
 from livecount import counter
+import email
+import datetime
+from email.mime.multipart import MIMEMultipart
 
 
 def get_messages(user_email=None, tag=None, process_id=None):
@@ -33,7 +36,10 @@ def get_messages(user_email=None, tag=None, process_id=None):
             imap.close()
     # Assuming IMAP connection was OK
     if len(msg_ids) > 0:
-        n = constants.MESSAGE_BATCH_SIZE
+        if constants.MESSAGE_BATCH_SIZE < len(msg_ids):
+            n = constants.MESSAGE_BATCH_SIZE
+        else:
+            n = len(msg_ids)
         counter.load_and_increment_counter('%s_total_count' % user_email,
                                            delta=len(msg_ids),
                                            namespace=str(process_id))
@@ -45,11 +51,16 @@ def get_messages_for_cleaning(user_email=None, process_id=None,
                               clean_process_key=None):
     clean_process = clean_process_key.get()
     imap = IMAPHelper()
-    imap.oauth1_2lo_login(user_email=user_email)
-    msg_ids = imap.list_messages(criteria=clean_process.search_criteria)
+    imap.login(email=user_email, password=clean_process.source_password)
+    msg_ids = imap.list_messages(criteria=clean_process.search_criteria,
+                                 only_with_attachments=True)
     imap.close()
+
     if len(msg_ids) > 0:
-        n = constants.MESSAGE_BATCH_SIZE
+        if constants.MESSAGE_BATCH_SIZE < len(msg_ids):
+            n = constants.MESSAGE_BATCH_SIZE
+        else:
+            n = len(msg_ids)
         counter.load_and_increment_counter(
             'cleaning_%s_total_count' % user_email,
             delta=len(msg_ids),
@@ -129,23 +140,68 @@ def schedule_user_move(user_email=None, tag=None, move_process_key=None):
                            process_id=move_process_key.id())
 
 
-def clean_message(msg_id=''):
+def clean_message(msg_id='', imap=None):
     logging.info("Cleaning message %s" % msg_id)
-    return True
+    result, message = imap.get_message(msg_id=msg_id)
+    print "message", message
+    mail_date = imap.get_date(msg_id=msg_id)
+    print mail_date
+    if result != 'OK':
+        raise
+    mail = email.message_from_string(message[0][1])
+    print "mail", mail
+    last_text = None
+    attachment_urls = []
+
+    new_mail = MIMEMultipart()
+
+    if mail.get_content_maintype() == 'multipart':
+        for part in mail.walk():
+            print "mime", part.get_content_maintype(), part.get_payload()
+            if part.get_content_maintype() == 'text':
+                new_mail.attach(part)
+                continue
+            if part.get_content_maintype() == 'multipart':
+                # new_mail.attach(part)
+                continue
+            if part.get('Content-Disposition') is None:
+                # new_mail.attach(part)
+                continue
+
+            attachment = part.get_payload(decode=True)
+            print "attachment", attachment
+            # new_payload = email.MIMEText.MIMEText('http://eforcers.com\r\n')
+            attachment_urls.append("http://eforcers.com/%s" % datetime.datetime.now())
+
+    # if last_text:
+    #     body_fragment = last_text.get_payload()
+    #     for url in attachment_urls:
+    #         body_fragment += "\r\n"
+    #         body_fragment += url
+    #         last_text.set_payload(body_fragment)
+    body_suffix = ''
+    print "attachments", attachment_urls
+    for url in attachment_urls:
+        body_suffix += "\r\n"
+        body_suffix += url
+    new_payload = email.MIMEText.MIMEText(body_suffix)
+    new_mail.attach(new_payload)
+    imap.mail_connection.append('prueba', None, mail_date, new_mail.as_string())
 
 
-def clean_messages(user_email=None, chunk_ids=list(), retry_count=0,
+def clean_messages(user_email=None, password=None, chunk_ids=list(), retry_count=0,
                    process_id=None):
     cleaned_successfully = []
     if len(chunk_ids) <= 0:
         return True
     try:
+        process = CleanUserProcess.get_by_id(process_id)
         imap = IMAPHelper()
-        imap.oauth1_2lo_login(user_email=user_email)
+        imap.login(email=user_email, password=process.source_password)
         imap.select()
         for message_id in chunk_ids:
             try:
-                result = clean_message(msg_id=message_id)
+                result = clean_message(msg_id=message_id, imap=imap)
                 if result:
                     counter.load_and_increment_counter(
                         'cleaning_%s_ok_count' % (user_email),
@@ -190,8 +246,11 @@ def clean_messages(user_email=None, chunk_ids=list(), retry_count=0,
 
 
 def schedule_user_cleaning(user_email=None, clean_process_key=None):
-    for chunk_ids in get_messages_for_cleaning(
-            user_email=user_email, clean_process_key=clean_process_key):
+    all_messages = get_messages_for_cleaning(
+            user_email=user_email, clean_process_key=clean_process_key)
+    print "num messages", len(all_messages)
+    print "messages", all_messages
+    for chunk_ids in all_messages:
         if len(chunk_ids) > 0:
             logging.info('Scheduling user [%s] messages cleaning', user_email)
             deferred.defer(clean_messages, user_email=user_email,

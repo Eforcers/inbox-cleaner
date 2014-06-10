@@ -12,6 +12,7 @@ from apiclient.discovery import build
 from oauth2client.client import Credentials, OAuth2WebServerFlow
 from inbox import app
 import constants
+import email
 
 
 class OAuthDanceHelper:
@@ -92,7 +93,10 @@ class IMAPHelper:
 
     def login(self, email, password):
         logging.info("Connecting to IMAP server with user [%s]", email)
-        result, data = self.mail_connection.login(email, password)
+        try:
+            result, data = self.mail_connection.login(email, password)
+        except:
+            result, data = 'NO', None
         return result, data
 
     def get_localized_labels(self):
@@ -103,6 +107,20 @@ class IMAPHelper:
                 self.all_labels[key] = label
 
         return self.all_labels
+
+    def get_date(self, msg_id=None):
+        result, header = self.mail_connection.uid(
+            'fetch', msg_id, '(BODY[HEADER.FIELDS (DATE SUBJECT)])')
+        if result != 'OK':
+            return None
+        headerparser = email.parser.HeaderParser()
+        headerdict = headerparser.parsestr(header[0][1])
+
+        pz = email.utils.parsedate_tz(headerdict["Date"])
+        stamp = email.utils.mktime_tz(pz)
+
+        date = imaplib.Time2Internaldate(stamp)
+        return date
 
     def close(self):
         logging.info('IMAP connection state: %s', self.mail_connection.state)

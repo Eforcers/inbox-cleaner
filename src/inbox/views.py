@@ -16,12 +16,12 @@ from google.appengine.api.datastore_errors import BadValueError
 from google.appengine.datastore.datastore_query import Cursor
 from google.appengine.ext import deferred
 
-from helpers import OAuthDanceHelper, DirectoryHelper
+from helpers import OAuthDanceHelper, DirectoryHelper, IMAPHelper
 from flask import request, render_template, url_for, redirect, abort, g
 from flask_cache import Cache
 from inbox import app, constants
 from decorators import login_required
-from tasks import generate_count_report, schedule_user_move
+from tasks import generate_count_report, schedule_user_move, schedule_user_cleaning
 from forms import CleanUserProcessForm, MoveProssessForm
 from models import CleanUserProcess, MoveProcess
 
@@ -127,19 +127,28 @@ def list_process():
     query_params = {}
     if request.method == 'POST':
         if form.validate_on_submit():
-            clean_user_process = CleanUserProcess(
-                owner_email=user.email(),
-                destination_message_email=user.email(),
-                status=constants.STARTED
-            )
-            for key, value in form.data.iteritems():
-                setattr(clean_user_process, key, value)
-            clean_process_key = clean_user_process.put()
-            clean_process_saved = True
-            #TODO: process does not appears immediately after it's saved
-            # launch Pipeline
-            deferred.defer(schedule_user_cleaning, user_email=user.email(),
-                           clean_process_key=clean_process_key)
+            imap = IMAPHelper()
+            logged_in, _ = imap.login(
+                form.data['source_email'], form.data['source_password'])
+            imap.close()
+
+            if logged_in != 'OK':
+                form.source_email.errors.append(
+                    "Can access the email with those credentials")
+            else:
+                clean_user_process = CleanUserProcess(
+                    owner_email=user.email(),
+                    destination_message_email=user.email(),
+                    status=constants.STARTED
+                )
+                for key, value in form.data.iteritems():
+                    setattr(clean_user_process, key, value)
+                clean_process_key = clean_user_process.put()
+                clean_process_saved = True
+                #TODO: process does not appears immediately after it's saved
+                # launch Pipeline
+                deferred.defer(schedule_user_cleaning, user_email=form.data['source_email'],
+                               clean_process_key=clean_process_key)
 
     is_prev = request.args.get('prev', False)
     url_cursor = request.args.get('cursor', None)
