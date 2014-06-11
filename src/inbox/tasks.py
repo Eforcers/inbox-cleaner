@@ -10,6 +10,7 @@ from inbox.models import ProcessedUser, MoveProcess, CleanUserProcess, \
     PrimaryDomain
 from livecount import counter
 import email
+from google.appengine.api import runtime
 
 
 def get_messages(user_email=None, tag=None, process_id=None):
@@ -101,6 +102,15 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
         imap.select(only_from_trash=True)
         for message_id in chunk_ids:
             try:
+                if runtime.is_shutting_down():
+                    remaining = list(set(chunk_ids) - set(moved_successfully))
+                    deferred.defer(move_messages, user_email=user_email,
+                                   tag=tag,
+                                   chunk_ids=remaining,
+                                   process_id=process_id,
+                                   retry_count=retry_count)
+                    break
+
                 result, data = imap.copy_message(
                     msg_id=message_id,
                     destination_label=tag,
