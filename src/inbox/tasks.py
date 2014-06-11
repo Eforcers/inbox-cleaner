@@ -78,49 +78,46 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
         imap = IMAPHelper()
         imap.oauth1_2lo_login(user_email=user_email)
         imap.select(only_from_trash=True)
-        for message_id in chunk_ids:
-            try:
-                result, data = imap.copy_message(
-                    msg_id=message_id,
-                    destination_label=tag,
-                    only_from_trash=True
-                )
-                if result == 'OK':
-                    counter.load_and_increment_counter(
-                        '%s_ok_count' % (user_email),
-                        namespace=str(process_id))
-                    moved_successfully.append(message_id)
-                else:
-                    counter.load_and_increment_counter(
-                        '%s_error_count' % user_email,
-                        namespace=str(process_id))
-                    logging.error(
-                        'Error moving message ID [%s] for user [%s]: [%s] '
-                        'data [%s]',
-                        message_id, user_email, result, data)
-            except Exception as e:
-                logging.exception(
-                    'Failed moving individual message ID [%s] for user [%s]',
-                    message_id, user_email)
-                remaining = list(set(chunk_ids) - set(moved_successfully))
-                # Keep retrying if messages are being moved
-                if retry_count >= 3 and len(moved_successfully) == 0:
-                    logging.error('Giving up with remaining [%s] messages for '
-                                  'user [%s]', len(remaining),
-                                  user_email)
-                    counter.load_and_increment_counter(
-                        '%s_error_count' % user_email, delta=len(remaining),
-                        namespace=str(process_id))
-                else:
-                    logging.info(
-                        'Scheduling [%s] remaining messages for user [%s]',
-                        len(remaining), user_email)
-                    deferred.defer(move_messages, user_email=user_email,
-                                   tag=tag,
-                                   chunk_ids=remaining,
-                                   process_id=process_id,
-                                   retry_count=retry_count + 1)
-                break
+        try:
+            result, data = imap.copy_message(
+                msg_id="%s:%s" % (chunk_ids[0], chunk_ids[-1]),
+                destination_label=tag,
+                only_from_trash=True
+            )
+            if result == 'OK':
+                counter.load_and_increment_counter(
+                    '%s_ok_count' % (user_email),
+                    namespace=str(process_id), delta=len(chunk_ids))
+                moved_successfully.extend(chunk_ids)
+            else:
+                counter.load_and_increment_counter(
+                    '%s_error_count' % user_email,
+                    namespace=str(process_id))
+                logging.error(
+                    'Error moving message IDs [%s-%s] for user [%s]: '
+                    'Result [%s] data [%s]', chunk_ids[0], chunk_ids[-1], user_email, result, data)
+        except Exception as e:
+            logging.exception(
+                'Failed moving individual message ID [%s-%s] for user [%s]', chunk_ids[0], chunk_ids[-1], user_email)
+            remaining = list(set(chunk_ids) - set(moved_successfully))
+            # Keep retrying if messages are being moved
+            if retry_count >= 3 and len(moved_successfully) == 0:
+                logging.error('Giving up with remaining [%s] messages for '
+                              'user [%s]', len(remaining),
+                              user_email)
+                counter.load_and_increment_counter(
+                    '%s_error_count' % user_email, delta=len(remaining),
+                    namespace=str(process_id))
+            else:
+                logging.info(
+                    'Scheduling [%s] remaining messages for user [%s]',
+                    len(remaining), user_email)
+                deferred.defer(move_messages, user_email=user_email,
+                               tag=tag,
+                               chunk_ids=remaining,
+                               process_id=process_id,
+                               retry_count=retry_count + 1)
+
     except Exception as e:
         logging.exception('Authentication, connection or select problem for '
                           'user [%s]', user_email)

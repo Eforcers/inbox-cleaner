@@ -21,7 +21,8 @@ from flask import request, render_template, url_for, redirect, abort, g
 from flask_cache import Cache
 from inbox import app, constants
 from decorators import login_required
-from tasks import generate_count_report, schedule_user_move, schedule_user_cleaning
+from tasks import generate_count_report, schedule_user_move, \
+    schedule_user_cleaning
 from forms import CleanUserProcessForm, MoveProssessForm
 from models import CleanUserProcess, MoveProcess
 
@@ -145,9 +146,10 @@ def list_process():
                     setattr(clean_user_process, key, value)
                 clean_process_key = clean_user_process.put()
                 clean_process_saved = True
-                #TODO: process does not appears immediately after it's saved
+                # TODO: process does not appears immediately after it's saved
                 # launch Pipeline
-                deferred.defer(schedule_user_cleaning, user_email=form.data['source_email'],
+                deferred.defer(schedule_user_cleaning,
+                               user_email=form.data['source_email'],
                                clean_process_key=clean_process_key)
 
     is_prev = request.args.get('prev', False)
@@ -155,10 +157,12 @@ def list_process():
     cursor = Cursor(urlsafe=url_cursor) if url_cursor else None
 
     if is_prev:
-        clean_process_query = clean_process_query.order(CleanUserProcess.created)
+        clean_process_query = clean_process_query.order(
+            CleanUserProcess.created)
         cursor = cursor.reversed()
     else:
-        clean_process_query = clean_process_query.order(-CleanUserProcess.created)
+        clean_process_query = clean_process_query.order(
+            -CleanUserProcess.created)
 
     data, next_curs, more = clean_process_query.fetch_page(
         constants.PAGE_SIZE, start_cursor=cursor)
@@ -233,3 +237,4 @@ def server_error(e):
 @app.errorhandler(403)
 def unauthorized(e):
     return render_template('403.html'), 403
+
