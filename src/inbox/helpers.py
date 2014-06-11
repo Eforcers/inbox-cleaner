@@ -11,6 +11,8 @@ import httplib2
 from util import OAuthEntity, GenerateXOauthString
 from apiclient.discovery import build
 from oauth2client.client import Credentials, OAuth2WebServerFlow
+from gdata.apps.emailsettings.client import EmailSettingsClient
+from gdata.gauth import OAuth2TokenFromCredentials
 from inbox import app
 import constants
 
@@ -69,6 +71,22 @@ class DirectoryHelper(OAuthServiceHelper):
             self.customer_id = user_document["customerId"]
             return user_document["customerId"]
         return None
+
+class EmailSettingsHelper(OAuthServiceHelper):
+    def __init__(self, credentials_json, domain=None, refresh_token=None):
+        OAuthServiceHelper.__init__(self, credentials_json, refresh_token)
+        client = EmailSettingsClient(domain=domain)
+        auth2token = OAuth2TokenFromCredentials(self.credentials)
+        self.client = auth2token.authorize(client)
+
+    def enable_imap(self, user):
+        self.client.update_imap(username=user, enable=True)
+
+    def disable_imap(self, user):
+        self.client.update_imap(username=user, enable=True)
+
+    def retrieve_imap_state(self, user):
+        return self.client.retrieve_imap(username=user)
 
 
 class IMAPHelper:

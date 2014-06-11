@@ -6,7 +6,9 @@ from google.appengine.ext import deferred
 
 from helpers import IMAPHelper
 import constants
-from inbox.models import ProcessedUser, MoveProcess, CleanUserProcess
+from inbox.helpers import EmailSettingsHelper
+from inbox.models import ProcessedUser, MoveProcess, CleanUserProcess, \
+    PrimaryDomain
 from livecount import counter
 
 
@@ -21,13 +23,27 @@ def get_messages(user_email=None, tag=None, process_id=None):
                 logging.info('Creating label [%s]', tag)
                 imap.create_label(tag)
             msg_ids = imap.list_messages(only_from_trash=True)
-        except:
+        except Exception as e:
             logging.exception('Error creating label or retrieving messages for '
                               'user [%s]', user_email)
+            processed_user = ProcessedUser.get_by_id(email)
+            if not processed_user:
+                processed_user = ProcessedUser(id=user_email, ok_count=0, error_count=0,
+                                     total_count=list(), error_description=list())
+            processed_user.error_description.append(e.message)
+            processed_user.put()
+
             return []
-    except:
+    except Exception as e:
         logging.exception('Authentication or connection problem for user '
                           '[%s]', user_email)
+        processed_user = ProcessedUser.get_by_id(user_email)
+        if not processed_user:
+            processed_user = ProcessedUser(id=user_email, ok_count=0, error_count=0,
+                                 total_count=list(), error_description=list())
+        processed_user.error_description.append(e.message)
+        processed_user.put()
+
         return []
     finally:
         if imap:
@@ -42,6 +58,11 @@ def get_messages(user_email=None, tag=None, process_id=None):
                                            delta=len(msg_ids),
                                            namespace=str(process_id))
         return [msg_ids[i::n] for i in xrange(n)]
+    else:
+        counter.load_and_increment_counter('%s_total_count' % user_email,
+                                           delta=0,
+                                           namespace=str(process_id))
+
     return []
 
 
@@ -132,7 +153,18 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
             imap.close()
 
 
-def schedule_user_move(user_email=None, tag=None, move_process_key=None):
+def schedule_user_move(user_email=None, tag=None, move_process_key=None, 
+                       domain_name=None):
+    try:
+        primary_domain = PrimaryDomain.get_or_create(domain_name=domain_name)
+        email_settings_helper =  EmailSettingsHelper(primary_domain.credentials,
+                            domain=domain_name,
+                            refresh_token=primary_domain.refresh_token)
+        email_settings_helper.enable_imap(user_email)
+    except:
+        logging.exception('error trying  to enable imap for user [%s]',
+                          user_email)
+
     for chunk_ids in get_messages(user_email=user_email, tag=tag,
                                   process_id=move_process_key.id()):
         if len(chunk_ids) > 0:
@@ -273,8 +305,10 @@ def generate_count_report():
                 '%s_total_count' % email, namespace=str(process.key.id()))
             if total_count:
                 process_total_count += total_count
-                if total_count not in user.total_count:
-                    user.total_count.append(total_count)
+            else:
+                total_count = 0
+            if total_count not in user.total_count:
+                user.total_count.append(total_count)
             ok_count = counter.load_and_get_count(
                 '%s_ok_count' % email, namespace=str(process.key.id()))
             if ok_count:

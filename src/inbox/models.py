@@ -21,11 +21,31 @@ def validate_email(prop, value):
     return value.lower()
 
 
-class User(ndb.Model):
-    email = ndb.StringProperty(required=True, validator=validate_email)
+class PrimaryDomain(ndb.Model):
     # OAuth credentials and token for the domain domain
     credentials = ndb.TextProperty(indexed=False)
     refresh_token = ndb.StringProperty(indexed=False)
+
+    @staticmethod
+    def get_or_create(domain_name):
+        primary_domain = PrimaryDomain.get_by_id(domain_name)
+        if not primary_domain:
+            primary_domain = PrimaryDomain(id=domain_name)
+            primary_domain.put()
+        return primary_domain
+
+class User(ndb.Model):
+    # OAuth credentials and token for the domain domain
+    credentials = ndb.TextProperty(indexed=False)
+    refresh_token = ndb.StringProperty(indexed=False)
+
+    @staticmethod
+    def get_or_create(user_email):
+        user = User.get_by_id(user_email)
+        if not user:
+            user = User(id=user_email)
+            user.put()
+        return user
 
 
 class CleanUserProcess(ndb.Model):
