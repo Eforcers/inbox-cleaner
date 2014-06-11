@@ -10,6 +10,7 @@ For example the *say_hello* handler, handling the URL route '/hello/<username>',
 
 """
 import logging
+import urllib
 
 from google.appengine.api import users
 from google.appengine.api.datastore_errors import BadValueError
@@ -21,6 +22,7 @@ from flask import request, render_template, url_for, redirect, abort, g
 from flask_cache import Cache
 from inbox import app, constants
 from decorators import login_required
+from inbox.models import PrimaryDomain, User
 from tasks import generate_count_report, schedule_user_move, schedule_user_cleaning
 from forms import CleanUserProcessForm, MoveProssessForm
 from models import CleanUserProcess, MoveProcess
@@ -78,44 +80,76 @@ def admin_index():
     return redirect(url_for('list_process'))
 
 
-@app.route('/oauth/start/', methods=['GET'])
+@app.route('/oauth/start/<string:type>/<string:domain>', methods=['GET'])
 @login_required
-def start_oauth2_dance(domain):
-    client = Client.get_instance()
-    login_hint = users.get_current_user().email()
-    approval_prompt = 'auto' if client.refresh_token else 'force'
-    scope = constants.OAUTH2_SCOPES
+def start_oauth2_dance(type, domain):
+    user_email = users.get_current_user().email()
+    login_hint = user_email
+
+    if type == 'primary':
+        primary_domain = PrimaryDomain.get_or_create(domain)
+        approval_prompt = 'auto' if primary_domain.refresh_token else 'force'
+        scope = constants.OAUTH2_SCOPES
+        state = urllib.quote('%s:%s' % (type, domain))
+    elif type == 'user':
+        user = User.get_or_create(user_email)
+        approval_prompt = 'auto' if user.refresh_token else 'force'
+        scope = constants.OAUTH2_SCOPES_USER
+        state = urllib.quote('%s:%s' % (type, user_email))
+
+
     redirect_uri = url_for('oauth_callback', _external=True)
     oauth_helper = OAuthDanceHelper(scope=scope, redirect_uri=redirect_uri,
                                     approval_prompt=approval_prompt)
     url = oauth_helper.step1_get_authorize_url()
     # TODO: Add a random token to avoid forgery
-    return redirect("%s?login_hint=%s" % (url, login_hint))
+    return redirect("%s&state=%s&login_hint=%s" % (url, state, login_hint))
 
 
 @app.route('/oauth/callback/', methods=['GET'])
-def oauth_callback(self):
+@login_required
+def oauth_callback():
     code = request.args.get('code', None)
     if not code:
         logging.error('No code, no authorization')
         abort(500)
+    state = request.args.get('state',None)
+    if not state:
+        logging.error('No state, no authorization')
+        abort(500)
+    oauth_type, target = urllib.unquote(state).split(':')
+
     redirect_uri = url_for('oauth_callback', _external=True)
     oauth_helper = OAuthDanceHelper(redirect_uri=redirect_uri)
     credentials = oauth_helper.step2_exchange(code)
-    client = Client.get_instance()
-    client.credentials = credentials.to_json()
-    if credentials.refresh_token:
-        client.refresh_token = credentials.refresh_token
-    directory_helper = DirectoryHelper(client.credentials, None,
-                                       client.refresh_token)
-    client.customer_id = directory_helper.get_customer_id(
-        client.administrators[0]
-    )
-    client.put()
+
+    if oauth_type == 'primary':
+        domain_name = target
+        primary_domain = PrimaryDomain.get_or_create(domain_name)
+        primary_domain.credentials = credentials.to_json()
+        if credentials.refresh_token:
+            primary_domain.refresh_token = credentials.refresh_token
+        primary_domain.put()
+    elif oauth_type == 'user':
+        user_email = target
+        user = User.get_or_create(user_email)
+        user.credentials = credentials.to_json()
+        if credentials.refresh_token:
+            user.refresh_token = credentials.refresh_token
+        user.put()
+
     return redirect(url_for('settings'))
 
 
-@app.route('/process/', methods=['GET', 'POST'])
+@app.route('/admin/settings/')
+@login_required
+def settings():
+    domain_name = users.get_current_user().email().split('@')[1]
+    return render_template(
+        'oauth/index.html',domain_name=domain_name
+    )
+
+@app.route('/admin/process/', methods=['GET', 'POST'])
 @login_required
 def list_process():
     form = CleanUserProcessForm()

@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block content %}
+    <h1 id="oauth_title">OAuth</h1>
+    <a
+            href="{{ url_for('start_oauth2_dance',type='primary',domain=domain_name)}}">
+        Click me to authorize domain
+    </a>
+    <br/>
+    <a
+            href="{{ url_for('start_oauth2_dance',type='user',domain=domain_name)}}">
+        Click me to authorize user
+    </a>
+    <br/>
+{% endblock %}
