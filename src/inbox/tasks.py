@@ -28,8 +28,10 @@ def get_messages(user_email=None, tag=None, process_id=None):
                               'user [%s]', user_email)
             processed_user = ProcessedUser.get_by_id(email)
             if not processed_user:
-                processed_user = ProcessedUser(id=user_email, ok_count=0, error_count=0,
-                                     total_count=list(), error_description=list())
+                processed_user = ProcessedUser(id=user_email, ok_count=0,
+                                               error_count=0,
+                                               total_count=list(),
+                                               error_description=list())
             processed_user.error_description.append(e.message)
             processed_user.put()
 
@@ -39,8 +41,10 @@ def get_messages(user_email=None, tag=None, process_id=None):
                           '[%s]', user_email)
         processed_user = ProcessedUser.get_by_id(user_email)
         if not processed_user:
-            processed_user = ProcessedUser(id=user_email, ok_count=0, error_count=0,
-                                 total_count=list(), error_description=list())
+            processed_user = ProcessedUser(id=user_email, ok_count=0,
+                                           error_count=0,
+                                           total_count=list(),
+                                           error_description=list())
         processed_user.error_description.append(e.message)
         processed_user.put()
 
@@ -116,10 +120,12 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
                     namespace=str(process_id))
                 logging.error(
                     'Error moving message IDs [%s-%s] for user [%s]: '
-                    'Result [%s] data [%s]', chunk_ids[0], chunk_ids[-1], user_email, result, data)
+                    'Result [%s] data [%s]', chunk_ids[0], chunk_ids[-1],
+                    user_email, result, data)
         except Exception as e:
             logging.exception(
-                'Failed moving individual message ID [%s-%s] for user [%s]', chunk_ids[0], chunk_ids[-1], user_email)
+                'Failed moving individual message ID [%s-%s] for user [%s]',
+                chunk_ids[0], chunk_ids[-1], user_email)
             remaining = list(set(chunk_ids) - set(moved_successfully))
             # Keep retrying if messages are being moved
             if retry_count >= 3 and len(moved_successfully) == 0:
@@ -153,17 +159,23 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
             imap.close()
 
 
-def schedule_user_move(user_email=None, tag=None, move_process_key=None, 
+def schedule_user_move(user_email=None, tag=None, move_process_key=None,
                        domain_name=None):
     try:
         primary_domain = PrimaryDomain.get_or_create(domain_name=domain_name)
-        email_settings_helper =  EmailSettingsHelper(primary_domain.credentials,
-                            domain=domain_name,
-                            refresh_token=primary_domain.refresh_token)
-        email_settings_helper.enable_imap(user_email)
-    except:
-        logging.exception('error trying  to enable imap for user [%s]',
+        if primary_domain.credentials:
+            email_settings_helper = EmailSettingsHelper(
+                credentials_json=primary_domain.credentials,
+                domain=domain_name,
+                refresh_token=primary_domain.refresh_token
+            )
+            email_settings_helper.enable_imap(user_email)
+        else:
+            logging.warn('Error trying to enable IMAP for user [%s]',
                           user_email)
+    except:
+        logging.exception('Domain [%s] is not authorized, IMAP not enabled',
+                          domain_name)
 
     for chunk_ids in get_messages(user_email=user_email, tag=tag,
                                   process_id=move_process_key.id()):
