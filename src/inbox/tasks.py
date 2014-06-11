@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+import email
 
 from google.appengine.ext import deferred
 
@@ -7,7 +8,6 @@ from helpers import IMAPHelper
 import constants
 from inbox.models import ProcessedUser, MoveProcess, CleanUserProcess
 from livecount import counter
-import email
 
 
 def get_messages(user_email=None, tag=None, process_id=None):
@@ -103,7 +103,15 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
                     'Failed moving individual message ID [%s] for user [%s]',
                     message_id, user_email)
                 remaining = list(set(chunk_ids) - set(moved_successfully))
-                if retry_count < 3:
+                # Keep retrying if messages are being moved
+                if retry_count >= 3 and len(moved_successfully) == 0:
+                    logging.error('Giving up with remaining [%s] messages for '
+                                  'user [%s]', len(remaining),
+                                  user_email)
+                    counter.load_and_increment_counter(
+                        '%s_error_count' % user_email, delta=len(remaining),
+                        namespace=str(process_id))
+                else:
                     logging.info(
                         'Scheduling [%s] remaining messages for user [%s]',
                         len(remaining), user_email)
@@ -112,21 +120,17 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
                                    chunk_ids=remaining,
                                    process_id=process_id,
                                    retry_count=retry_count + 1)
-                else:
-                    logging.info('Giving up with remaining [%s] messages for '
-                                 'user [%s]', len(remaining),
-                                 user_email)
-                    counter.load_and_increment_counter(
-                        '%s_error_count' % user_email, delta=len(remaining),
-                        namespace=str(process_id))
                 break
     except Exception as e:
         logging.exception('Authentication, connection or select problem for '
                           'user [%s]', user_email)
         counter.load_and_increment_counter(
-                        '%s_error_count' % user_email, delta=len(chunk_ids),
-                        namespace=str(process_id))
+            '%s_error_count' % user_email, delta=len(chunk_ids),
+            namespace=str(process_id))
     finally:
+        logging.info(
+            'Succesfully moved [%s] messages for user [%s] in this task',
+            len(moved_successfully), user_email)
         if imap:
             imap.close()
 
@@ -185,7 +189,8 @@ def clean_message(msg_id='', imap=None):
     return True
 
 
-def clean_messages(user_email=None, password=None, chunk_ids=list(), retry_count=0,
+def clean_messages(user_email=None, password=None, chunk_ids=list(),
+                   retry_count=0,
                    process_id=None):
     cleaned_successfully = []
     if len(chunk_ids) <= 0:
@@ -243,9 +248,8 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(), retry_count
 
 def schedule_user_cleaning(user_email=None, clean_process_key=None):
     all_messages = get_messages_for_cleaning(
-            user_email=user_email, clean_process_key=clean_process_key)
-    print "num messages", len(all_messages)
-    print "messages", all_messages
+        user_email=user_email, clean_process_key=clean_process_key)
+    logging.info("Total messages: %s", len(all_messages))
     for chunk_ids in all_messages:
         if len(chunk_ids) > 0:
             logging.info('Scheduling user [%s] messages cleaning', user_email)
