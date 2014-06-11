@@ -17,18 +17,18 @@ from google.appengine.api.datastore_errors import BadValueError
 from google.appengine.datastore.datastore_query import Cursor
 from google.appengine.ext import deferred
 
-from helpers import OAuthDanceHelper, DirectoryHelper, IMAPHelper
+from helpers import OAuthDanceHelper, IMAPHelper
 from flask import request, render_template, url_for, redirect, abort, g
 from flask_cache import Cache
 from inbox import app, constants
 from decorators import login_required
-from inbox.models import PrimaryDomain, User
 import secret_keys
-from tasks import generate_count_report, schedule_user_move, schedule_user_cleaning
 from tasks import generate_count_report, schedule_user_move, \
     schedule_user_cleaning
 from forms import CleanUserProcessForm, MoveProssessForm
-from models import CleanUserProcess, MoveProcess
+from models import CleanUserProcess, MoveProcess, PrimaryDomain
+
+
 
 # Flask-Cache (configured to use App Engine Memcache API)
 cache = Cache(app)
@@ -109,7 +109,7 @@ def oauth_callback():
     if not code:
         logging.error('No code, no authorization')
         abort(500)
-    state = request.args.get('state',None)
+    state = request.args.get('state', None)
     if not state:
         logging.error('No state, no authorization')
         abort(500)
@@ -131,11 +131,12 @@ def oauth_callback():
 @app.route('/admin/settings/')
 @login_required
 def settings():
-    #domain_name = users.get_current_user().email().split('@')[1]
+    # domain_name = users.get_current_user().email().split('@')[1]
     domain_name = secret_keys.OAUTH2_CONSUMER_KEY
     return render_template(
-        'oauth/index.html',domain_name=domain_name
+        'oauth/index.html', domain_name=domain_name
     )
+
 
 @app.route('/admin/process/', methods=['GET', 'POST'])
 @login_required
@@ -223,7 +224,7 @@ def move_process():
                     for email in emails:
                         deferred.defer(schedule_user_move, user_email=email,
                                        tag=move_process.tag,
-                                       #domain_name=user.email().split('@')[1],
+                                       # domain_name=user.email().split('@')[1],
                                        domain_name=secret_keys.OAUTH2_CONSUMER_KEY,
                                        move_process_key=move_process_key)
                     process_id = move_process_key.id()
