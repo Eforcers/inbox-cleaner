@@ -8,8 +8,6 @@ import constants
 from inbox.models import ProcessedUser, MoveProcess, CleanUserProcess
 from livecount import counter
 import email
-import datetime
-from email.mime.multipart import MIMEMultipart
 
 
 def get_messages(user_email=None, tag=None, process_id=None):
@@ -144,52 +142,47 @@ def schedule_user_move(user_email=None, tag=None, move_process_key=None):
 
 
 def clean_message(msg_id='', imap=None):
-    logging.info("Cleaning message %s" % msg_id)
     result, message = imap.get_message(msg_id=msg_id)
-    print "message", message
     mail_date = imap.get_date(msg_id=msg_id)
-    print mail_date
     if result != 'OK':
         raise
     mail = email.message_from_string(message[0][1])
     print "mail", mail
-    last_text = None
-    attachment_urls = []
-
-    new_mail = MIMEMultipart()
+    attachments = []
 
     if mail.get_content_maintype() == 'multipart':
         for part in mail.walk():
-            print "mime", part.get_content_maintype(), part.get_payload()
-            if part.get_content_maintype() == 'text':
-                new_mail.attach(part)
-                continue
             if part.get_content_maintype() == 'multipart':
-                # new_mail.attach(part)
                 continue
             if part.get('Content-Disposition') is None:
-                # new_mail.attach(part)
                 continue
 
             attachment = part.get_payload(decode=True)
-            print "attachment", attachment
-            # new_payload = email.MIMEText.MIMEText('http://eforcers.com\r\n')
-            attachment_urls.append("http://eforcers.com/%s" % datetime.datetime.now())
+            logging.info("Attachment content is %s" % attachment)
 
-    # if last_text:
-    #     body_fragment = last_text.get_payload()
-    #     for url in attachment_urls:
-    #         body_fragment += "\r\n"
-    #         body_fragment += url
-    #         last_text.set_payload(body_fragment)
-    body_suffix = ''
-    print "attachments", attachment_urls
-    for url in attachment_urls:
-        body_suffix += "\r\n"
-        body_suffix += url
-    new_payload = email.MIMEText.MIMEText(body_suffix)
-    new_mail.attach(new_payload)
-    imap.mail_connection.append('prueba', None, mail_date, new_mail.as_string())
+            # Send attachment to drive
+
+            # And get the drive url
+
+            drive_url = 'http://eforcers.com'
+            attachments.append((drive_url, part.get_filename()))
+
+            part.set_payload("")
+            for header in part.keys():
+                part.__delitem__(header)
+
+    for url, filename in attachments:
+        body_suffix = '<a href="%s">%s</a>' % (url, filename)
+        new_payload = email.MIMEText.MIMEText(body_suffix, 'html')
+        mail.attach(new_payload)
+
+    # Send new mail
+
+    # Then delete previous email
+
+    # For tests only - remove later
+    # imap.mail_connection.append('prueba', None, mail_date, mail.as_string())
+    return True
 
 
 def clean_messages(user_email=None, password=None, chunk_ids=list(), retry_count=0,
