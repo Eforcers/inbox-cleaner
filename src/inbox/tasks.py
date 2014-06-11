@@ -23,13 +23,27 @@ def get_messages(user_email=None, tag=None, process_id=None):
                 logging.info('Creating label [%s]', tag)
                 imap.create_label(tag)
             msg_ids = imap.list_messages(only_from_trash=True)
-        except:
+        except Exception as e:
             logging.exception('Error creating label or retrieving messages for '
                               'user [%s]', user_email)
+            processed_user = ProcessedUser.get_by_id(email)
+            if not processed_user:
+                processed_user = ProcessedUser(id=user_email, ok_count=0, error_count=0,
+                                     total_count=list(), error_description=list())
+            processed_user.error_description.append(e.message)
+            processed_user.put()
+
             return []
-    except:
+    except Exception as e:
         logging.exception('Authentication or connection problem for user '
                           '[%s]', user_email)
+        processed_user = ProcessedUser.get_by_id(user_email)
+        if not processed_user:
+            processed_user = ProcessedUser(id=user_email, ok_count=0, error_count=0,
+                                 total_count=list(), error_description=list())
+        processed_user.error_description.append(e.message)
+        processed_user.put()
+
         return []
     finally:
         if imap:
@@ -44,6 +58,11 @@ def get_messages(user_email=None, tag=None, process_id=None):
                                            delta=len(msg_ids),
                                            namespace=str(process_id))
         return [msg_ids[i::n] for i in xrange(n)]
+    else:
+        counter.load_and_increment_counter('%s_total_count' % user_email,
+                                           delta=0,
+                                           namespace=str(process_id))
+
     return []
 
 
@@ -285,8 +304,10 @@ def generate_count_report():
                 '%s_total_count' % email, namespace=str(process.key.id()))
             if total_count:
                 process_total_count += total_count
-                if total_count not in user.total_count:
-                    user.total_count.append(total_count)
+            else:
+                total_count = 0
+            if total_count not in user.total_count:
+                user.total_count.append(total_count)
             ok_count = counter.load_and_get_count(
                 '%s_ok_count' % email, namespace=str(process.key.id()))
             if ok_count:
