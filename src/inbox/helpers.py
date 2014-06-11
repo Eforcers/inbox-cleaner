@@ -226,7 +226,10 @@ class IMAPHelper:
 
 
     def add_message_labels(self, msg_id=None, new_labels=None):
-        labels_string = '"' + '" "'.join(new_labels) + '"'
+        formatted_labels = []
+        for label in new_labels:
+            formatted_labels.append(label.strip('"'))
+        labels_string = '"' + '" "'.join(formatted_labels) + '"'
         result, data = self.mail_connection.uid('STORE', msg_id, '+X-GM-LABELS',
                                                 labels_string)
         return result, data

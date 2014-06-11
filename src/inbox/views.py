@@ -27,6 +27,7 @@ import secret_keys
 from tasks import generate_count_report, schedule_user_move, schedule_user_cleaning
 from forms import CleanUserProcessForm, MoveProssessForm
 from models import CleanUserProcess, MoveProcess
+from google.appengine.api import runtime
 
 # Flask-Cache (configured to use App Engine Memcache API)
 cache = Cache(app)
@@ -62,6 +63,8 @@ def warmup():
     """
     return ''
 
+def shutdown_hook():
+    logging.info("shutting down")
 
 @app.route('/_ah/start')
 def start():
