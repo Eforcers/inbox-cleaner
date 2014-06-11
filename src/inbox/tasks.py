@@ -146,8 +146,9 @@ def clean_message(msg_id='', imap=None):
     mail_date = imap.get_date(msg_id=msg_id)
     if result != 'OK':
         raise
+    result, label_data = imap.get_message_labels(msg_id=msg_id)
+    labels = (((label_data[0].split('('))[2].split(')'))[0]).split()
     mail = email.message_from_string(message[0][1])
-    print "mail", mail
     attachments = []
 
     if mail.get_content_maintype() == 'multipart':
@@ -181,7 +182,8 @@ def clean_message(msg_id='', imap=None):
     # Then delete previous email
 
     # For tests only - remove later
-    # imap.mail_connection.append('prueba', None, mail_date, mail.as_string())
+    # result, data = imap.mail_connection.append('prueba', None, mail_date, mail.as_string())
+
     return True
 
 
@@ -244,8 +246,6 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(), retry_count
 def schedule_user_cleaning(user_email=None, clean_process_key=None):
     all_messages = get_messages_for_cleaning(
             user_email=user_email, clean_process_key=clean_process_key)
-    print "num messages", len(all_messages)
-    print "messages", all_messages
     for chunk_ids in all_messages:
         if len(chunk_ids) > 0:
             logging.info('Scheduling user [%s] messages cleaning', user_email)
