@@ -5,7 +5,9 @@ from google.appengine.ext import deferred
 
 from helpers import IMAPHelper
 import constants
-from inbox.models import ProcessedUser, MoveProcess, CleanUserProcess
+from inbox.helpers import EmailSettingsHelper
+from inbox.models import ProcessedUser, MoveProcess, CleanUserProcess, \
+    PrimaryDomain
 from livecount import counter
 import email
 
@@ -131,7 +133,18 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
             imap.close()
 
 
-def schedule_user_move(user_email=None, tag=None, move_process_key=None):
+def schedule_user_move(user_email=None, tag=None, move_process_key=None, 
+                       domain_name=None):
+    try:
+        primary_domain = PrimaryDomain.get_or_create(domain_name=domain_name)
+        email_settings_helper =  EmailSettingsHelper(primary_domain.credentials,
+                            domain=domain_name,
+                            refresh_token=primary_domain.refresh_token)
+        email_settings_helper.enable_imap(user_email)
+    except:
+        logging.exception('error trying  to enable imap for user [%s]',
+                          user_email)
+
     for chunk_ids in get_messages(user_email=user_email, tag=tag,
                                   process_id=move_process_key.id()):
         if len(chunk_ids) > 0:

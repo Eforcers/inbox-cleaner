@@ -21,9 +21,8 @@ EMAIL_REGEXP = "^[a-zA-Z0-9'._-]+@[a-zA-Z0-9._-]+.[a-zA-Z]{2,6}$"
 
 OAUTH2_SCOPES = 'https://www.googleapis.com/auth/userinfo.email ' \
                 'https://www.googleapis.com/auth/email.migration ' \
-                'https://apps-apis.google.com/a/feeds/emailsettings/2.0/'
-
-OAUTH2_SCOPES_USER = 'https://www.googleapis.com/auth/drive'
+                'https://apps-apis.google.com/a/feeds/emailsettings/2.0/ ' \
+                'https://www.googleapis.com/auth/drive'
 
 MENU_ITEMS = [
     ('admin_index', 'Home'),

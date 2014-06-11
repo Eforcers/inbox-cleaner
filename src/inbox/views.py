@@ -23,6 +23,7 @@ from flask_cache import Cache
 from inbox import app, constants
 from decorators import login_required
 from inbox.models import PrimaryDomain, User
+import secret_keys
 from tasks import generate_count_report, schedule_user_move, schedule_user_cleaning
 from forms import CleanUserProcessForm, MoveProssessForm
 from models import CleanUserProcess, MoveProcess
@@ -80,23 +81,16 @@ def admin_index():
     return redirect(url_for('list_process'))
 
 
-@app.route('/oauth/start/<string:type>/<string:domain>', methods=['GET'])
+@app.route('/oauth/start/<string:domain>', methods=['GET'])
 @login_required
-def start_oauth2_dance(type, domain):
+def start_oauth2_dance(domain):
     user_email = users.get_current_user().email()
     login_hint = user_email
 
-    if type == 'primary':
-        primary_domain = PrimaryDomain.get_or_create(domain)
-        approval_prompt = 'auto' if primary_domain.refresh_token else 'force'
-        scope = constants.OAUTH2_SCOPES
-        state = urllib.quote('%s:%s' % (type, domain))
-    elif type == 'user':
-        user = User.get_or_create(user_email)
-        approval_prompt = 'auto' if user.refresh_token else 'force'
-        scope = constants.OAUTH2_SCOPES_USER
-        state = urllib.quote('%s:%s' % (type, user_email))
-
+    primary_domain = PrimaryDomain.get_or_create(domain)
+    approval_prompt = 'auto' if primary_domain.refresh_token else 'force'
+    scope = constants.OAUTH2_SCOPES
+    state = urllib.quote(domain)
 
     redirect_uri = url_for('oauth_callback', _external=True)
     oauth_helper = OAuthDanceHelper(scope=scope, redirect_uri=redirect_uri,
@@ -117,26 +111,17 @@ def oauth_callback():
     if not state:
         logging.error('No state, no authorization')
         abort(500)
-    oauth_type, target = urllib.unquote(state).split(':')
+    domain_name = urllib.unquote(state)
 
     redirect_uri = url_for('oauth_callback', _external=True)
     oauth_helper = OAuthDanceHelper(redirect_uri=redirect_uri)
     credentials = oauth_helper.step2_exchange(code)
 
-    if oauth_type == 'primary':
-        domain_name = target
-        primary_domain = PrimaryDomain.get_or_create(domain_name)
-        primary_domain.credentials = credentials.to_json()
-        if credentials.refresh_token:
-            primary_domain.refresh_token = credentials.refresh_token
-        primary_domain.put()
-    elif oauth_type == 'user':
-        user_email = target
-        user = User.get_or_create(user_email)
-        user.credentials = credentials.to_json()
-        if credentials.refresh_token:
-            user.refresh_token = credentials.refresh_token
-        user.put()
+    primary_domain = PrimaryDomain.get_or_create(domain_name)
+    primary_domain.credentials = credentials.to_json()
+    if credentials.refresh_token:
+        primary_domain.refresh_token = credentials.refresh_token
+    primary_domain.put()
 
     return redirect(url_for('settings'))
 
@@ -144,7 +129,8 @@ def oauth_callback():
 @app.route('/admin/settings/')
 @login_required
 def settings():
-    domain_name = users.get_current_user().email().split('@')[1]
+    #domain_name = users.get_current_user().email().split('@')[1]
+    domain_name = secret_keys.OAUTH2_CONSUMER_KEY
     return render_template(
         'oauth/index.html',domain_name=domain_name
     )
@@ -232,6 +218,8 @@ def move_process():
                     for email in emails:
                         deferred.defer(schedule_user_move, user_email=email,
                                        tag=move_process.tag,
+                                       #domain_name=user.email().split('@')[1],
+                                       domain_name=secret_keys.OAUTH2_CONSUMER_KEY,
                                        move_process_key=move_process_key)
                     process_id = move_process_key.id()
                 else:
