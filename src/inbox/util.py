@@ -7,6 +7,11 @@ import time
 import urllib
 
 
+def chunkify(l, n):
+    n = n if n < len(l) else len(l)
+    c = len(l)/n + 1
+    return [l[i:i+c] for i in range(0, len(l), c)]
+
 class OAuthEntity(object):
     """Represents consumers and tokens in OAuth."""
 

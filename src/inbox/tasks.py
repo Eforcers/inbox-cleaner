@@ -4,11 +4,11 @@ import email
 
 from google.appengine.ext import deferred
 
-from helpers import IMAPHelper
 import constants
-from inbox.helpers import EmailSettingsHelper
-from inbox.models import ProcessedUser, MoveProcess, CleanUserProcess, \
+from helpers import EmailSettingsHelper, IMAPHelper
+from models import ProcessedUser, MoveProcess, CleanUserProcess, \
     PrimaryDomain
+from util import chunkify
 from livecount import counter
 
 
@@ -54,15 +54,10 @@ def get_messages(user_email=None, tag=None, process_id=None):
             imap.close()
     # Assuming IMAP connection was OK
     if len(msg_ids) > 0:
-        if constants.MESSAGE_BATCH_SIZE < len(msg_ids):
-            n = constants.MESSAGE_BATCH_SIZE
-        else:
-            n = len(msg_ids)
         counter.load_and_increment_counter('%s_total_count' % user_email,
                                            delta=len(msg_ids),
                                            namespace=str(process_id))
-        c = len(msg_ids)/n + 1
-        return [msg_ids[i:i+c] for i in range(0, len(msg_ids), c)]
+        return chunkify(msg_ids, constants.USER_CONNECTION_LIMIT)
     else:
         counter.load_and_increment_counter('%s_total_count' % user_email,
                                            delta=0,
@@ -81,8 +76,8 @@ def get_messages_for_cleaning(user_email=None, process_id=None,
     imap.close()
 
     if len(msg_ids) > 0:
-        if constants.MESSAGE_BATCH_SIZE < len(msg_ids):
-            n = constants.MESSAGE_BATCH_SIZE
+        if constants.USER_CONNECTION_LIMIT < len(msg_ids):
+            n = constants.USER_CONNECTION_LIMIT
         else:
             n = len(msg_ids)
         counter.load_and_increment_counter(
@@ -104,47 +99,47 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
         imap = IMAPHelper()
         imap.oauth1_2lo_login(user_email=user_email)
         imap.select(only_from_trash=True)
-        try:
-            result, data = imap.copy_message(
-                msg_id="%s:%s" % (chunk_ids[0], chunk_ids[-1]),
-                destination_label=tag
-            )
-            if result == 'OK':
-                counter.load_and_increment_counter(
-                    '%s_ok_count' % (user_email),
-                    namespace=str(process_id), delta=len(chunk_ids))
-                moved_successfully.extend(chunk_ids)
-            else:
-                counter.load_and_increment_counter(
-                    '%s_error_count' % user_email,
-                    namespace=str(process_id))
-                logging.error(
-                    'Error moving message IDs [%s-%s] for user [%s]: '
-                    'Result [%s] data [%s]', chunk_ids[0], chunk_ids[-1],
-                    user_email, result, data)
-        except Exception as e:
-            logging.exception(
-                'Failed moving message range IDs [%s-%s] for user [%s]',
-                chunk_ids[0], chunk_ids[-1], user_email)
-            remaining = list(set(chunk_ids) - set(moved_successfully))
-            # Keep retrying if messages are being moved
-            if retry_count >= 3 and len(moved_successfully) == 0:
-                logging.error('Giving up with remaining [%s] messages for '
-                              'user [%s]', len(remaining),
-                              user_email)
-                counter.load_and_increment_counter(
-                    '%s_error_count' % user_email, delta=len(remaining),
-                    namespace=str(process_id))
-            else:
-                logging.info(
-                    'Scheduling [%s] remaining messages for user [%s]',
-                    len(remaining), user_email)
-                deferred.defer(move_messages, user_email=user_email,
-                               tag=tag,
-                               chunk_ids=remaining,
-                               process_id=process_id,
-                               retry_count=retry_count + 1)
-
+        for chunk in chunkify(chunk_ids, constants.MESSAGE_BATCH_SIZE):
+            try:
+                result, data = imap.copy_message(
+                    msg_id="%s:%s" % (chunk[0], chunk[-1]),
+                    destination_label=tag
+                )
+                if result == 'OK':
+                    counter.load_and_increment_counter(
+                        '%s_ok_count' % (user_email),
+                        namespace=str(process_id), delta=len(chunk))
+                    moved_successfully.extend(chunk)
+                else:
+                    counter.load_and_increment_counter(
+                        '%s_error_count' % user_email,
+                        namespace=str(process_id))
+                    logging.error(
+                        'Error moving message IDs [%s-%s] for user [%s]: '
+                        'Result [%s] data [%s]', chunk[0], chunk[-1],
+                        user_email, result, data)
+            except Exception as e:
+                logging.exception(
+                    'Failed moving message range IDs [%s-%s] for user [%s]',
+                    chunk[0], chunk[-1], user_email)
+                remaining = list(set(chunk) - set(moved_successfully))
+                # Keep retrying if messages are being moved
+                if retry_count >= 3 and len(moved_successfully) == 0:
+                    logging.error('Giving up with remaining [%s] messages for '
+                                  'user [%s]', len(remaining),
+                                  user_email)
+                    counter.load_and_increment_counter(
+                        '%s_error_count' % user_email, delta=len(remaining),
+                        namespace=str(process_id))
+                else:
+                    logging.info(
+                        'Scheduling [%s] remaining messages for user [%s]',
+                        len(remaining), user_email)
+                    deferred.defer(move_messages, user_email=user_email,
+                                   tag=tag,
+                                   chunk_ids=remaining,
+                                   process_id=process_id,
+                                   retry_count=retry_count + 1)
     except Exception as e:
         logging.exception('Authentication, connection or select problem for '
                           'user [%s]', user_email)
