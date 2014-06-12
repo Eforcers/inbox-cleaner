@@ -54,3 +54,5 @@ STATUS_CHOICES = [
     FINISHED,
     FAILED
 ]
+
+ATTACHMENT_FOLDER = 'Adjuntos'
