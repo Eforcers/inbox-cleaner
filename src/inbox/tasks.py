@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+import email
 
 from google.appengine.ext import deferred
 
@@ -9,8 +10,6 @@ from inbox.helpers import EmailSettingsHelper
 from inbox.models import ProcessedUser, MoveProcess, CleanUserProcess, \
     PrimaryDomain
 from livecount import counter
-import email
-from google.appengine.api import runtime
 
 
 def get_messages(user_email=None, tag=None, process_id=None):
@@ -62,7 +61,8 @@ def get_messages(user_email=None, tag=None, process_id=None):
         counter.load_and_increment_counter('%s_total_count' % user_email,
                                            delta=len(msg_ids),
                                            namespace=str(process_id))
-        return [msg_ids[i::n] for i in xrange(n)]
+        c = len(msg_ids)/n + 1
+        return [msg_ids[i:i+c] for i in range(0, len(msg_ids), c)]
     else:
         counter.load_and_increment_counter('%s_total_count' % user_email,
                                            delta=0,
@@ -107,8 +107,7 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
         try:
             result, data = imap.copy_message(
                 msg_id="%s:%s" % (chunk_ids[0], chunk_ids[-1]),
-                destination_label=tag,
-                only_from_trash=True
+                destination_label=tag
             )
             if result == 'OK':
                 counter.load_and_increment_counter(
@@ -125,7 +124,7 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
                     user_email, result, data)
         except Exception as e:
             logging.exception(
-                'Failed moving individual message ID [%s-%s] for user [%s]',
+                'Failed moving message range IDs [%s-%s] for user [%s]',
                 chunk_ids[0], chunk_ids[-1], user_email)
             remaining = list(set(chunk_ids) - set(moved_successfully))
             # Keep retrying if messages are being moved
@@ -159,6 +158,7 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
         if imap:
             imap.close()
 
+
 def schedule_user_move(user_email=None, tag=None, move_process_key=None,
                        domain_name=None):
     try:
@@ -172,7 +172,7 @@ def schedule_user_move(user_email=None, tag=None, move_process_key=None,
             email_settings_helper.enable_imap(user_email)
         else:
             logging.warn('Error trying to enable IMAP for user [%s]',
-                          user_email)
+                         user_email)
     except:
         logging.exception('Domain [%s] is not authorized, IMAP not enabled',
                           domain_name)
@@ -291,7 +291,7 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(),
 
 def schedule_user_cleaning(user_email=None, clean_process_key=None):
     all_messages = get_messages_for_cleaning(
-            user_email=user_email, clean_process_key=clean_process_key)
+        user_email=user_email, clean_process_key=clean_process_key)
     for chunk_ids in all_messages:
         if len(chunk_ids) > 0:
             logging.info('Scheduling user [%s] messages cleaning', user_email)
