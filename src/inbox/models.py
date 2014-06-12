@@ -109,3 +109,4 @@ class ProcessedUser(ndb.Model):
     ok_count = ndb.IntegerProperty(indexed=False)
     error_count = ndb.IntegerProperty(indexed=False)
     total_count = ndb.IntegerProperty(indexed=False, repeated=True)
+    error_description = ndb.StringProperty(indexed=False, repeated=True)
