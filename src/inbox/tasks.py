@@ -57,7 +57,7 @@ def get_messages(user_email=None, tag=None, process_id=None):
         counter.load_and_increment_counter('%s_total_count' % user_email,
                                            delta=len(msg_ids),
                                            namespace=str(process_id))
-        return chunkify(msg_ids, constants.USER_CONNECTION_LIMIT)
+        return chunkify(msg_ids, num_chunks=constants.USER_CONNECTION_LIMIT)
     else:
         counter.load_and_increment_counter('%s_total_count' % user_email,
                                            delta=0,
@@ -99,7 +99,8 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
         imap = IMAPHelper()
         imap.oauth1_2lo_login(user_email=user_email)
         imap.select(only_from_trash=True)
-        for chunk in chunkify(chunk_ids, constants.MESSAGE_BATCH_SIZE):
+        for chunk in chunkify(chunk_ids,
+                              chunk_size=constants.MESSAGE_BATCH_SIZE):
             try:
                 result, data = imap.copy_message(
                     msg_id="%s:%s" % (chunk[0], chunk[-1]),
@@ -113,7 +114,7 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
                 else:
                     counter.load_and_increment_counter(
                         '%s_error_count' % user_email,
-                        namespace=str(process_id))
+                        namespace=str(process_id), delta=len(chunk))
                     logging.error(
                         'Error moving message IDs [%s-%s] for user [%s]: '
                         'Result [%s] data [%s]', chunk[0], chunk[-1],
@@ -122,7 +123,7 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
                 logging.exception(
                     'Failed moving message range IDs [%s-%s] for user [%s]',
                     chunk[0], chunk[-1], user_email)
-                remaining = list(set(chunk) - set(moved_successfully))
+                remaining = list(set(chunk_ids) - set(moved_successfully))
                 # Keep retrying if messages are being moved
                 if retry_count >= 3 and len(moved_successfully) == 0:
                     logging.error('Giving up with remaining [%s] messages for '
@@ -140,6 +141,7 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
                                    chunk_ids=remaining,
                                    process_id=process_id,
                                    retry_count=retry_count + 1)
+                break
     except Exception as e:
         logging.exception('Authentication, connection or select problem for '
                           'user [%s]', user_email)
@@ -156,21 +158,25 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
 
 def schedule_user_move(user_email=None, tag=None, move_process_key=None,
                        domain_name=None):
-    try:
-        primary_domain = PrimaryDomain.get_or_create(domain_name=domain_name)
-        if primary_domain.credentials:
-            email_settings_helper = EmailSettingsHelper(
-                credentials_json=primary_domain.credentials,
-                domain=domain_name,
-                refresh_token=primary_domain.refresh_token
-            )
-            email_settings_helper.enable_imap(user_email)
-        else:
-            logging.warn('Error trying to enable IMAP for user [%s]',
-                         user_email)
-    except:
-        logging.exception('Domain [%s] is not authorized, IMAP not enabled',
-                          domain_name)
+    if domain_name:
+        try:
+            primary_domain = PrimaryDomain.get_or_create(
+                domain_name=domain_name)
+            if primary_domain.credentials:
+                email_settings_helper = EmailSettingsHelper(
+                    credentials_json=primary_domain.credentials,
+                    domain=domain_name,
+                    refresh_token=primary_domain.refresh_token
+                )
+                email_settings_helper.enable_imap(user_email)
+                logging.info('IMAP enabled for [%s]',
+                              user_email)
+            else:
+                logging.warn('Error trying to enable IMAP for user [%s]',
+                             user_email)
+        except:
+            logging.exception('Domain [%s] is not authorized, IMAP not enabled',
+                              domain_name)
 
     for chunk_ids in get_messages(user_email=user_email, tag=tag,
                                   process_id=move_process_key.id()):

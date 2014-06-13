@@ -5,12 +5,20 @@ import hmac
 import random
 import time
 import urllib
+import logging
 
 
-def chunkify(l, n):
-    n = n if n < len(l) else len(l)
-    c = len(l)/n + 1
-    return [l[i:i+c] for i in range(0, len(l), c)]
+def chunkify(l, num_chunks=None, chunk_size=None):
+    if chunk_size:
+        n = chunk_size if chunk_size < len(l) else len(l)
+        return [l[i:i+n] for i in xrange(0, len(l), n)]
+    elif num_chunks:
+        n = num_chunks if num_chunks < len(l) else len(l)
+        c = len(l)/n + 1
+        return [l[i:i+c] for i in range(0, len(l), c)]
+    else:
+        logging.error('Either num_chunks or chunk_size should be given')
+        return l
 
 class OAuthEntity(object):
     """Represents consumers and tokens in OAuth."""

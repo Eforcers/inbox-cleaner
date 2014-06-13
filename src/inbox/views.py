@@ -28,9 +28,6 @@ from tasks import generate_count_report, schedule_user_move, \
 from forms import CleanUserProcessForm, MoveProssessForm
 from models import CleanUserProcess, MoveProcess, PrimaryDomain
 
-
-
-
 # Flask-Cache (configured to use App Engine Memcache API)
 cache = Cache(app)
 
@@ -227,11 +224,14 @@ def move_process():
                     move_process.tag = form.data['tag']
                     move_process_key = move_process.put()
                     for email in emails:
-                        deferred.defer(schedule_user_move, user_email=email,
-                                       tag=move_process.tag,
-                                       # domain_name=user.email().split('@')[1],
-                                       domain_name=secret_keys.OAUTH2_CONSUMER_KEY,
-                                       move_process_key=move_process_key)
+                        deferred.defer(
+                            schedule_user_move,
+                            user_email=email,
+                            tag=move_process.tag,
+                            # TODO: Domain of the namespace
+                            domain_name=secret_keys.OAUTH2_CONSUMER_KEY,
+                            move_process_key=move_process_key
+                        )
                     process_id = move_process_key.id()
                 else:
                     form.errors['Emails'] = ['Emails should not be empty']
