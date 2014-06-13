@@ -1,18 +1,16 @@
 # -*- coding: utf-8 -*-
 import logging
+import email
 
 from google.appengine.ext import deferred
 
-from helpers import IMAPHelper
 import constants
-from inbox.helpers import EmailSettingsHelper, DriveHelper
-from inbox.models import ProcessedUser, MoveProcess, CleanUserProcess, \
-    PrimaryDomain
-from livecount import counter
-import email
-from google.appengine.api import runtime
 import secret_keys
-from google.appengine.api import users
+from helpers import EmailSettingsHelper, IMAPHelper, DriveHelper
+from models import ProcessedUser, MoveProcess, CleanUserProcess, \
+    PrimaryDomain
+from util import chunkify
+from livecount import counter
 
 
 def get_messages(user_email=None, tag=None, process_id=None):
@@ -31,8 +29,10 @@ def get_messages(user_email=None, tag=None, process_id=None):
                               'user [%s]', user_email)
             processed_user = ProcessedUser.get_by_id(email)
             if not processed_user:
-                processed_user = ProcessedUser(id=user_email, ok_count=0, error_count=0,
-                                     total_count=list(), error_description=list())
+                processed_user = ProcessedUser(id=user_email, ok_count=0,
+                                               error_count=0,
+                                               total_count=list(),
+                                               error_description=list())
             processed_user.error_description.append(e.message)
             processed_user.put()
 
@@ -42,8 +42,10 @@ def get_messages(user_email=None, tag=None, process_id=None):
                           '[%s]', user_email)
         processed_user = ProcessedUser.get_by_id(user_email)
         if not processed_user:
-            processed_user = ProcessedUser(id=user_email, ok_count=0, error_count=0,
-                                 total_count=list(), error_description=list())
+            processed_user = ProcessedUser(id=user_email, ok_count=0,
+                                           error_count=0,
+                                           total_count=list(),
+                                           error_description=list())
         processed_user.error_description.append(e.message)
         processed_user.put()
 
@@ -53,14 +55,10 @@ def get_messages(user_email=None, tag=None, process_id=None):
             imap.close()
     # Assuming IMAP connection was OK
     if len(msg_ids) > 0:
-        if constants.MESSAGE_BATCH_SIZE < len(msg_ids):
-            n = constants.MESSAGE_BATCH_SIZE
-        else:
-            n = len(msg_ids)
         counter.load_and_increment_counter('%s_total_count' % user_email,
                                            delta=len(msg_ids),
                                            namespace=str(process_id))
-        return [msg_ids[i::n] for i in xrange(n)]
+        return chunkify(msg_ids, num_chunks=constants.USER_CONNECTION_LIMIT)
     else:
         counter.load_and_increment_counter('%s_total_count' % user_email,
                                            delta=0,
@@ -79,8 +77,8 @@ def get_messages_for_cleaning(user_email=None, process_id=None,
     imap.close()
 
     if len(msg_ids) > 0:
-        if constants.MESSAGE_BATCH_SIZE < len(msg_ids):
-            n = constants.MESSAGE_BATCH_SIZE
+        if constants.USER_CONNECTION_LIMIT < len(msg_ids):
+            n = constants.USER_CONNECTION_LIMIT
         else:
             n = len(msg_ids)
         counter.load_and_increment_counter(
@@ -102,41 +100,40 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
         imap = IMAPHelper()
         imap.oauth1_2lo_login(user_email=user_email)
         imap.select(only_from_trash=True)
-        for message_id in chunk_ids:
+        for chunk in chunkify(chunk_ids,
+                              chunk_size=constants.MESSAGE_BATCH_SIZE):
             try:
-                if runtime.is_shutting_down():
-                    remaining = list(set(chunk_ids) - set(moved_successfully))
-                    deferred.defer(move_messages, user_email=user_email,
-                                   tag=tag,
-                                   chunk_ids=remaining,
-                                   process_id=process_id,
-                                   retry_count=retry_count)
-                    break
-
                 result, data = imap.copy_message(
-                    msg_id=message_id,
-                    destination_label=tag,
-                    only_from_trash=True
+                    msg_id="%s:%s" % (chunk[0], chunk[-1]),
+                    destination_label=tag
                 )
                 if result == 'OK':
                     counter.load_and_increment_counter(
                         '%s_ok_count' % (user_email),
-                        namespace=str(process_id))
-                    moved_successfully.append(message_id)
+                        namespace=str(process_id), delta=len(chunk))
+                    moved_successfully.extend(chunk)
                 else:
                     counter.load_and_increment_counter(
                         '%s_error_count' % user_email,
-                        namespace=str(process_id))
+                        namespace=str(process_id), delta=len(chunk))
                     logging.error(
-                        'Error moving message ID [%s] for user [%s]: [%s] '
-                        'data [%s]',
-                        message_id, user_email, result, data)
+                        'Error moving message IDs [%s-%s] for user [%s]: '
+                        'Result [%s] data [%s]', chunk[0], chunk[-1],
+                        user_email, result, data)
             except Exception as e:
                 logging.exception(
-                    'Failed moving individual message ID [%s] for user [%s]',
-                    message_id, user_email)
+                    'Failed moving message range IDs [%s-%s] for user [%s]',
+                    chunk[0], chunk[-1], user_email)
                 remaining = list(set(chunk_ids) - set(moved_successfully))
-                if retry_count < 3:
+                # Keep retrying if messages are being moved
+                if retry_count >= 3 and len(moved_successfully) == 0:
+                    logging.error('Giving up with remaining [%s] messages for '
+                                  'user [%s]', len(remaining),
+                                  user_email)
+                    counter.load_and_increment_counter(
+                        '%s_error_count' % user_email, delta=len(remaining),
+                        namespace=str(process_id))
+                else:
                     logging.info(
                         'Scheduling [%s] remaining messages for user [%s]',
                         len(remaining), user_email)
@@ -145,36 +142,42 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
                                    chunk_ids=remaining,
                                    process_id=process_id,
                                    retry_count=retry_count + 1)
-                else:
-                    logging.info('Giving up with remaining [%s] messages for '
-                                 'user [%s]', len(remaining),
-                                 user_email)
-                    counter.load_and_increment_counter(
-                        '%s_error_count' % user_email, delta=len(remaining),
-                        namespace=str(process_id))
                 break
     except Exception as e:
         logging.exception('Authentication, connection or select problem for '
                           'user [%s]', user_email)
         counter.load_and_increment_counter(
-                        '%s_error_count' % user_email, delta=len(chunk_ids),
-                        namespace=str(process_id))
+            '%s_error_count' % user_email, delta=len(chunk_ids),
+            namespace=str(process_id))
     finally:
+        logging.info(
+            'Succesfully moved [%s] messages for user [%s] in this task',
+            len(moved_successfully), user_email)
         if imap:
             imap.close()
 
 
-def schedule_user_move(user_email=None, tag=None, move_process_key=None, 
+def schedule_user_move(user_email=None, tag=None, move_process_key=None,
                        domain_name=None):
-    try:
-        primary_domain = PrimaryDomain.get_or_create(domain_name=domain_name)
-        email_settings_helper =  EmailSettingsHelper(primary_domain.credentials,
-                            domain=domain_name,
-                            refresh_token=primary_domain.refresh_token)
-        email_settings_helper.enable_imap(user_email)
-    except:
-        logging.exception('error trying  to enable imap for user [%s]',
-                          user_email)
+    if domain_name:
+        try:
+            primary_domain = PrimaryDomain.get_or_create(
+                domain_name=domain_name)
+            if primary_domain.credentials:
+                email_settings_helper = EmailSettingsHelper(
+                    credentials_json=primary_domain.credentials,
+                    domain=domain_name,
+                    refresh_token=primary_domain.refresh_token
+                )
+                email_settings_helper.enable_imap(user_email)
+                logging.info('IMAP enabled for [%s]',
+                             user_email)
+            else:
+                logging.warn('Error trying to enable IMAP for user [%s]',
+                             user_email)
+        except:
+            logging.exception('Domain [%s] is not authorized, IMAP not enabled',
+                              domain_name)
 
     for chunk_ids in get_messages(user_email=user_email, tag=tag,
                                   process_id=move_process_key.id()):
@@ -185,7 +188,8 @@ def schedule_user_move(user_email=None, tag=None, move_process_key=None,
                            process_id=move_process_key.id())
 
 
-def clean_message(msg_id='', imap=None, drive=None, folder_id=None, user_email=None):
+def clean_message(msg_id='', imap=None, drive=None, folder_id=None,
+                  user_email=None):
     result, message = imap.get_message(msg_id=msg_id)
     mail_date = imap.get_date(msg_id=msg_id)
     if result != 'OK':
@@ -212,11 +216,12 @@ def clean_message(msg_id='', imap=None, drive=None, folder_id=None, user_email=N
             file_id = ''
 
             if ((meta and int(meta['fileSize']) != len(attachment) and
-                 meta['properties']) or
-                not meta):
+                     meta['properties']) or
+                    not meta):
                 inserted_file = drive.insert_file(filename=filename,
-                                  mime_type=mime_type,
-                                  content=attachment, parent_id=folder_id)
+                                                  mime_type=mime_type,
+                                                  content=attachment,
+                                                  parent_id=folder_id)
                 if inserted_file:
                     drive_url = inserted_file['downloadUrl']
                 file_id = inserted_file['id']
@@ -224,8 +229,9 @@ def clean_message(msg_id='', imap=None, drive=None, folder_id=None, user_email=N
                 drive_url = meta['downloadUrl']
                 file_id = meta['id']
 
-            permission = drive.insert_permission(file_id=file_id, value=user_email,
-                                    type='user', role='reader')
+            permission = drive.insert_permission(file_id=file_id,
+                                                 value=user_email,
+                                                 type='user', role='reader')
 
             attachments.append((drive_url, filename))
 
@@ -247,8 +253,8 @@ def clean_message(msg_id='', imap=None, drive=None, folder_id=None, user_email=N
     return True
 
 
-def clean_messages(user_email=None, password=None, chunk_ids=list(), retry_count=0,
-                   process_id=None, admin_email=None):
+def clean_messages(user_email=None, password=None, chunk_ids=list(),
+                   retry_count=0, process_id=None):
     cleaned_successfully = []
     if len(chunk_ids) <= 0:
         return True
@@ -260,24 +266,29 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(), retry_count
         imap.select()
 
         try:
-            primary_domain = PrimaryDomain.get_or_create(secret_keys.OAUTH2_CONSUMER_KEY)
+            primary_domain = PrimaryDomain.get_or_create(
+                secret_keys.OAUTH2_CONSUMER_KEY)
             drive = DriveHelper(credentials_json=primary_domain.credentials,
-                        admin_email=admin_email,
-                        refresh_token=primary_domain.refresh_token)
+                                admin_email=primary_domain.admin_email,
+                                refresh_token=primary_domain.refresh_token)
             folder = drive.get_folder(constants.ATTACHMENT_FOLDER)
             if not folder:
                 folder = drive.create_folder(constants.ATTACHMENT_FOLDER)
             sub_folder = drive.get_folder(user_email)
             if not sub_folder:
-                sub_folder = drive.create_folder(user_email, [{'id': folder['id']}])
+                sub_folder = drive.create_folder(user_email,
+                                                 [{'id': folder['id']}])
         except Exception as e:
-            logging.error("Couldn't authenticate drive for user %s" % user_email)
+            logging.error(
+                "Couldn't authenticate drive for user %s" % user_email)
             raise e
 
         for message_id in chunk_ids:
             try:
-                result = clean_message(msg_id=message_id, imap=imap, drive=drive,
-                                       folder_id=sub_folder['id'], user_email=user_email)
+                result = clean_message(msg_id=message_id, imap=imap,
+                                       drive=drive,
+                                       folder_id=sub_folder['id'],
+                                       user_email=user_email)
                 if result:
                     counter.load_and_increment_counter(
                         'cleaning_%s_ok_count' % (user_email),
@@ -324,7 +335,7 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(), retry_count
 def schedule_user_cleaning(user_email=None, clean_process_key=None,
                            admin_email=None):
     all_messages = get_messages_for_cleaning(
-            user_email=user_email, clean_process_key=clean_process_key)
+        user_email=user_email, clean_process_key=clean_process_key)
     for chunk_ids in all_messages:
         if len(chunk_ids) > 0:
             logging.info('Scheduling user [%s] messages cleaning', user_email)

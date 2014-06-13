@@ -17,17 +17,16 @@ from google.appengine.api.datastore_errors import BadValueError
 from google.appengine.datastore.datastore_query import Cursor
 from google.appengine.ext import deferred
 
-from helpers import OAuthDanceHelper, DirectoryHelper, IMAPHelper
+from helpers import OAuthDanceHelper, IMAPHelper
 from flask import request, render_template, url_for, redirect, abort, g
 from flask_cache import Cache
 from inbox import app, constants
 from decorators import login_required
-from inbox.models import PrimaryDomain, User
 import secret_keys
-from tasks import generate_count_report, schedule_user_move, schedule_user_cleaning
+from tasks import generate_count_report, schedule_user_move, \
+    schedule_user_cleaning
 from forms import CleanUserProcessForm, MoveProssessForm
-from models import CleanUserProcess, MoveProcess
-from google.appengine.api import runtime
+from models import CleanUserProcess, MoveProcess, PrimaryDomain
 
 # Flask-Cache (configured to use App Engine Memcache API)
 cache = Cache(app)
@@ -63,8 +62,10 @@ def warmup():
     """
     return ''
 
+
 def shutdown_hook():
     logging.info("shutting down")
+
 
 @app.route('/_ah/start')
 def start():
@@ -110,7 +111,7 @@ def oauth_callback():
     if not code:
         logging.error('No code, no authorization')
         abort(500)
-    state = request.args.get('state',None)
+    state = request.args.get('state', None)
     if not state:
         logging.error('No state, no authorization')
         abort(500)
@@ -132,11 +133,12 @@ def oauth_callback():
 @app.route('/admin/settings/')
 @login_required
 def settings():
-    #domain_name = users.get_current_user().email().split('@')[1]
+    # domain_name = users.get_current_user().email().split('@')[1]
     domain_name = secret_keys.OAUTH2_CONSUMER_KEY
     return render_template(
-        'oauth/index.html',domain_name=domain_name
+        'oauth/index.html', domain_name=domain_name
     )
+
 
 @app.route('/admin/process/', methods=['GET', 'POST'])
 @login_required
@@ -168,7 +170,7 @@ def list_process():
                     setattr(clean_user_process, key, value)
                 clean_process_key = clean_user_process.put()
                 clean_process_saved = True
-                #TODO: process does not appears immediately after it's saved
+                # TODO: process does not appears immediately after it's saved
                 # launch Pipeline
                 deferred.defer(schedule_user_cleaning, user_email=form.data['source_email'],
                                clean_process_key=clean_process_key, admin_email=user.email())
@@ -178,10 +180,12 @@ def list_process():
     cursor = Cursor(urlsafe=url_cursor) if url_cursor else None
 
     if is_prev:
-        clean_process_query = clean_process_query.order(CleanUserProcess.created)
+        clean_process_query = clean_process_query.order(
+            CleanUserProcess.created)
         cursor = cursor.reversed()
     else:
-        clean_process_query = clean_process_query.order(-CleanUserProcess.created)
+        clean_process_query = clean_process_query.order(
+            -CleanUserProcess.created)
 
     data, next_curs, more = clean_process_query.fetch_page(
         constants.PAGE_SIZE, start_cursor=cursor)
@@ -219,11 +223,14 @@ def move_process():
                     move_process.tag = form.data['tag']
                     move_process_key = move_process.put()
                     for email in emails:
-                        deferred.defer(schedule_user_move, user_email=email,
-                                       tag=move_process.tag,
-                                       #domain_name=user.email().split('@')[1],
-                                       domain_name=secret_keys.OAUTH2_CONSUMER_KEY,
-                                       move_process_key=move_process_key)
+                        deferred.defer(
+                            schedule_user_move,
+                            user_email=email,
+                            tag=move_process.tag,
+                            # TODO: Domain of the namespace
+                            domain_name=secret_keys.OAUTH2_CONSUMER_KEY,
+                            move_process_key=move_process_key
+                        )
                     process_id = move_process_key.id()
                 else:
                     form.errors['Emails'] = ['Emails should not be empty']
@@ -258,3 +265,4 @@ def server_error(e):
 @app.errorhandler(403)
 def unauthorized(e):
     return render_template('403.html'), 403
+

@@ -35,15 +35,11 @@ IMAP_ALL_LABEL_EN = '[Gmail]/All Mail'
 IMAP_TRASH_LABEL_EN = '[Gmail]/Trash'
 IMAP_TRASH_LABEL_ES = '[Gmail]/Papelera'
 
-IMAP_ALL_LABEL_ES = '[Gmail]/Todos'
-IMAP_ALL_LABEL_EN = '[Gmail]/All Mail'
-IMAP_TRASH_LABEL_EN = '[Gmail]/Trash'
-IMAP_TRASH_LABEL_ES = '[Gmail]/Papelera'
-
 GMAIL_TRASH_KEY = '(\\HasNoChildren \\Trash)'
 GMAIL_ALL_KEY = '(\\HasNoChildren \\All)'
 
-MESSAGE_BATCH_SIZE = 7
+USER_CONNECTION_LIMIT = 7
+MESSAGE_BATCH_SIZE = 250
 
 STARTED = 'STARTED'
 FINISHED = 'FINISHED'

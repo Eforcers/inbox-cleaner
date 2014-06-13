@@ -4,6 +4,7 @@ import StringIO
 
 import imaplib
 import logging
+import email
 
 import httplib2
 
@@ -17,7 +18,6 @@ from gdata.apps.emailsettings.client import EmailSettingsClient
 from gdata.gauth import OAuth2TokenFromCredentials
 from inbox import app
 import constants
-import email
 
 
 class OAuthDanceHelper:
@@ -306,7 +306,7 @@ class IMAPHelper:
             return None, None
         return result, data
 
-    def copy_message(self, msg_id=None, destination_label=None, only_from_trash=False):
+    def copy_message(self, msg_id=None, destination_label=None):
         # For any message that we find, we will copy it to the destination label.
         # and remove the original label. IMAP does not have a move command.
         result, data = self.mail_connection.uid('COPY', msg_id,
@@ -335,5 +335,5 @@ class IMAPHelper:
 
     def delete_message(self, msg_id=None):
         self.mail_connection.uid('COPY', msg_id,
-                             self.all_labels[constants.GMAIL_TRASH_KEY])
+                                 self.all_labels[constants.GMAIL_TRASH_KEY])
         self.mail_connection.expunge()
