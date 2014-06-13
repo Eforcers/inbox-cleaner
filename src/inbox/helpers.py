@@ -67,9 +67,10 @@ class DriveHelper(OAuthServiceHelper):
     def get_folder(self, name="", parent_id=None):
         mime = "mimeType='application/vnd.google-apps.folder'"
         if not parent_id:
-            q = "%s AND title='%s'" % (mime, name)
+            q = "%s AND title='%s' and trashed = false" % (mime, name)
         else:
-            q = "%s AND title='%s' and '%s' in parents" % (mime, name, parent_id)
+            q = "%s AND title='%s' and '%s' in parents and trashed = false" % (
+                mime, name, parent_id)
         files = self.service.files().list(q=q).execute()
         if files['items']:
             return files['items'][0]
@@ -95,8 +96,7 @@ class DriveHelper(OAuthServiceHelper):
             logging.error('Error creating drive file: %s' % error)
         return None
 
-    def insert_file(self, filename=None, mime_type=None, content=None, parent_id=None,
-                    file_hash=None):
+    def insert_file(self, filename=None, mime_type=None, content=None, parent_id=None):
         custom_property = {
             'key': 'created_by',
             'value': 'inbox-cleaner',
