@@ -5,13 +5,12 @@ import email
 from google.appengine.ext import deferred
 
 import constants
-from helpers import EmailSettingsHelper, IMAPHelper
+import secret_keys
+from helpers import EmailSettingsHelper, IMAPHelper, DriveHelper
 from models import ProcessedUser, MoveProcess, CleanUserProcess, \
     PrimaryDomain
 from util import chunkify
 from livecount import counter
-import email
-from google.appengine.api import runtime
 
 
 def get_messages(user_email=None, tag=None, process_id=None):
@@ -172,7 +171,7 @@ def schedule_user_move(user_email=None, tag=None, move_process_key=None,
                 )
                 email_settings_helper.enable_imap(user_email)
                 logging.info('IMAP enabled for [%s]',
-                              user_email)
+                             user_email)
             else:
                 logging.warn('Error trying to enable IMAP for user [%s]',
                              user_email)
@@ -189,7 +188,8 @@ def schedule_user_move(user_email=None, tag=None, move_process_key=None,
                            process_id=move_process_key.id())
 
 
-def clean_message(msg_id='', imap=None, drive=None, folder_id=None, user_email=None):
+def clean_message(msg_id='', imap=None, drive=None, folder_id=None,
+                  user_email=None):
     result, message = imap.get_message(msg_id=msg_id)
     mail_date = imap.get_date(msg_id=msg_id)
     if result != 'OK':
@@ -216,11 +216,12 @@ def clean_message(msg_id='', imap=None, drive=None, folder_id=None, user_email=N
             file_id = ''
 
             if ((meta and int(meta['fileSize']) != len(attachment) and
-                 meta['properties']) or
-                not meta):
+                     meta['properties']) or
+                    not meta):
                 inserted_file = drive.insert_file(filename=filename,
-                                  mime_type=mime_type,
-                                  content=attachment, parent_id=folder_id)
+                                                  mime_type=mime_type,
+                                                  content=attachment,
+                                                  parent_id=folder_id)
                 if inserted_file:
                     drive_url = inserted_file['downloadUrl']
                 file_id = inserted_file['id']
@@ -228,8 +229,9 @@ def clean_message(msg_id='', imap=None, drive=None, folder_id=None, user_email=N
                 drive_url = meta['downloadUrl']
                 file_id = meta['id']
 
-            permission = drive.insert_permission(file_id=file_id, value=user_email,
-                                    type='user', role='reader')
+            permission = drive.insert_permission(file_id=file_id,
+                                                 value=user_email,
+                                                 type='user', role='reader')
 
             attachments.append((drive_url, filename))
 
@@ -252,8 +254,7 @@ def clean_message(msg_id='', imap=None, drive=None, folder_id=None, user_email=N
 
 
 def clean_messages(user_email=None, password=None, chunk_ids=list(),
-                   retry_count=0,
-                   process_id=None):
+                   retry_count=0, process_id=None):
     cleaned_successfully = []
     if len(chunk_ids) <= 0:
         return True
@@ -265,24 +266,29 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(),
         imap.select()
 
         try:
-            primary_domain = PrimaryDomain.get_or_create(secret_keys.OAUTH2_CONSUMER_KEY)
+            primary_domain = PrimaryDomain.get_or_create(
+                secret_keys.OAUTH2_CONSUMER_KEY)
             drive = DriveHelper(credentials_json=primary_domain.credentials,
-                        admin_email=admin_email,
-                        refresh_token=primary_domain.refresh_token)
+                                admin_email=primary_domain.admin_email,
+                                refresh_token=primary_domain.refresh_token)
             folder = drive.get_folder(constants.ATTACHMENT_FOLDER)
             if not folder:
                 folder = drive.create_folder(constants.ATTACHMENT_FOLDER)
             sub_folder = drive.get_folder(user_email)
             if not sub_folder:
-                sub_folder = drive.create_folder(user_email, [{'id': folder['id']}])
+                sub_folder = drive.create_folder(user_email,
+                                                 [{'id': folder['id']}])
         except Exception as e:
-            logging.error("Couldn't authenticate drive for user %s" % user_email)
+            logging.error(
+                "Couldn't authenticate drive for user %s" % user_email)
             raise e
 
         for message_id in chunk_ids:
             try:
-                result = clean_message(msg_id=message_id, imap=imap, drive=drive,
-                                       folder_id=sub_folder['id'], user_email=user_email)
+                result = clean_message(msg_id=message_id, imap=imap,
+                                       drive=drive,
+                                       folder_id=sub_folder['id'],
+                                       user_email=user_email)
                 if result:
                     counter.load_and_increment_counter(
                         'cleaning_%s_ok_count' % (user_email),
