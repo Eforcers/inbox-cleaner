@@ -172,9 +172,8 @@ def list_process():
                 clean_process_saved = True
                 # TODO: process does not appears immediately after it's saved
                 # launch Pipeline
-                deferred.defer(schedule_user_cleaning,
-                               user_email=form.data['source_email'],
-                               clean_process_key=clean_process_key)
+                deferred.defer(schedule_user_cleaning, user_email=form.data['source_email'],
+                               clean_process_key=clean_process_key, admin_email=user.email())
 
     is_prev = request.args.get('prev', False)
     url_cursor = request.args.get('cursor', None)

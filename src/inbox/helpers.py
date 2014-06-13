@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 # vim: set fileencoding=utf-8
-
+import StringIO
 
 import imaplib
 import logging
 import email
 
 import httplib2
+
+from apiclient import errors
+from apiclient.http import MediaIoBaseUpload
 
 from util import OAuthEntity, GenerateXOauthString
 from apiclient.discovery import build
@@ -53,6 +56,98 @@ class OAuthServiceHelper:
             self.credentials.refresh_token = refresh_token
         self.http = self.credentials.authorize(httplib2.Http())
 
+
+class DriveHelper(OAuthServiceHelper):
+    """ Google Drive API helper class"""
+    def __init__(self, credentials_json=None, admin_email=None, refresh_token=None):
+        OAuthServiceHelper.__init__(self, credentials_json, refresh_token)
+        self.service = build('drive', 'v2', http=self.http)
+        self.admin_email = admin_email
+
+    def get_folder(self, name="", parent_id=None):
+        mime = "mimeType='application/vnd.google-apps.folder'"
+        if not parent_id:
+            q = "%s AND title='%s'" % (mime, name)
+        else:
+            q = "%s AND title='%s' and '%s' in parents" % (mime, name, parent_id)
+        files = self.service.files().list(q=q).execute()
+        if files['items']:
+            return files['items'][0]
+        else:
+            return None
+
+    def create_folder(self, name, parents=None):
+        mime_type = "application/vnd.google-apps.folder"
+        body = {
+            'title': name,
+            'mimeType': mime_type
+        }
+
+        if parents:
+            body['parents'] = parents
+
+        try:
+            file = self.service.files().insert(
+                body=body).execute()
+
+            return file
+        except errors.HttpError, error:
+            logging.error('Error creating drive file: %s' % error)
+        return None
+
+    def insert_file(self, filename=None, mime_type=None, content=None, parent_id=None,
+                    file_hash=None):
+        custom_property = {
+            'key': 'created_by',
+            'value': 'inbox-cleaner',
+            'visibility': 'PRIVATE'
+        }
+
+        body = {
+            'title': filename,
+            'mimeType': mime_type,
+            'properties': [custom_property]
+        }
+        if parent_id:
+            body['parents'] = [{'id': parent_id}]
+        try:
+            media_body = MediaIoBaseUpload(StringIO.StringIO(content), mime_type)
+            created_file = self.service.files().insert(body=body, media_body=media_body).execute()
+            return created_file
+        except Exception as e:
+            logging.error("Error uploading file %s" % filename)
+            raise e
+
+    def get_metadata(self, title=None, parent_id=None):
+        try:
+            if not parent_id:
+                q = "title='%s' and trashed = false" % title
+            else:
+                q = "title='%s' and '%s' in parents and trashed = false" % (
+                    title, parent_id)
+            files = self.service.files().list(q=q).execute()
+            if files['items']:
+                return files['items'][0]
+            else:
+                return None
+        except Exception as e:
+            logging.error('Error getting file %s metadata, error: %s' % (title, e))
+
+    def insert_permission(self, file_id=None, value=None, type=None, role=None):
+        new_permission = {
+            'value': value,
+            'type': type,
+            'role': role
+        }
+
+        try:
+            return self.service.permissions().insert(
+                fileId=file_id, body=new_permission,
+                sendNotificationEmails=False).execute()
+        except Exception as e:
+            logging.error('Error inserting permission for file: %s, error: %s' % (
+                file_id, e))
+            return None
 
 class DirectoryHelper(OAuthServiceHelper):
     """ Google Directory API helper class"""

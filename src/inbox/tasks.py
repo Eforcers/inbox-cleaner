@@ -10,6 +10,8 @@ from models import ProcessedUser, MoveProcess, CleanUserProcess, \
     PrimaryDomain
 from util import chunkify
 from livecount import counter
+import email
+from google.appengine.api import runtime
 
 
 def get_messages(user_email=None, tag=None, process_id=None):
@@ -187,7 +189,7 @@ def schedule_user_move(user_email=None, tag=None, move_process_key=None,
                            process_id=move_process_key.id())
 
 
-def clean_message(msg_id='', imap=None):
+def clean_message(msg_id='', imap=None, drive=None, folder_id=None, user_email=None):
     result, message = imap.get_message(msg_id=msg_id)
     mail_date = imap.get_date(msg_id=msg_id)
     if result != 'OK':
@@ -205,14 +207,31 @@ def clean_message(msg_id='', imap=None):
                 continue
 
             attachment = part.get_payload(decode=True)
-            logging.info("Attachment content is %s" % attachment)
+            mime_type = part.get_content_type()
+            filename = part.get_filename()
 
             # Send attachment to drive
+            meta = drive.get_metadata(title=filename, parent_id=folder_id)
+            drive_url = ''
+            file_id = ''
 
-            # And get the drive url
+            if ((meta and int(meta['fileSize']) != len(attachment) and
+                 meta['properties']) or
+                not meta):
+                inserted_file = drive.insert_file(filename=filename,
+                                  mime_type=mime_type,
+                                  content=attachment, parent_id=folder_id)
+                if inserted_file:
+                    drive_url = inserted_file['downloadUrl']
+                file_id = inserted_file['id']
+            elif meta:
+                drive_url = meta['downloadUrl']
+                file_id = meta['id']
 
-            drive_url = 'http://eforcers.com'
-            attachments.append((drive_url, part.get_filename()))
+            permission = drive.insert_permission(file_id=file_id, value=user_email,
+                                    type='user', role='reader')
+
+            attachments.append((drive_url, filename))
 
             part.set_payload("")
             for header in part.keys():
@@ -229,7 +248,6 @@ def clean_message(msg_id='', imap=None):
 
     # For tests only - remove later
     # result, data = imap.mail_connection.append('prueba', None, mail_date, mail.as_string())
-
     return True
 
 
@@ -239,14 +257,32 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(),
     cleaned_successfully = []
     if len(chunk_ids) <= 0:
         return True
+
     try:
         process = CleanUserProcess.get_by_id(process_id)
         imap = IMAPHelper()
         imap.login(email=user_email, password=process.source_password)
         imap.select()
+
+        try:
+            primary_domain = PrimaryDomain.get_or_create(secret_keys.OAUTH2_CONSUMER_KEY)
+            drive = DriveHelper(credentials_json=primary_domain.credentials,
+                        admin_email=admin_email,
+                        refresh_token=primary_domain.refresh_token)
+            folder = drive.get_folder(constants.ATTACHMENT_FOLDER)
+            if not folder:
+                folder = drive.create_folder(constants.ATTACHMENT_FOLDER)
+            sub_folder = drive.get_folder(user_email)
+            if not sub_folder:
+                sub_folder = drive.create_folder(user_email, [{'id': folder['id']}])
+        except Exception as e:
+            logging.error("Couldn't authenticate drive for user %s" % user_email)
+            raise e
+
         for message_id in chunk_ids:
             try:
-                result = clean_message(msg_id=message_id, imap=imap)
+                result = clean_message(msg_id=message_id, imap=imap, drive=drive,
+                                       folder_id=sub_folder['id'], user_email=user_email)
                 if result:
                     counter.load_and_increment_counter(
                         'cleaning_%s_ok_count' % (user_email),
@@ -290,7 +326,8 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(),
             imap.close()
 
 
-def schedule_user_cleaning(user_email=None, clean_process_key=None):
+def schedule_user_cleaning(user_email=None, clean_process_key=None,
+                           admin_email=None):
     all_messages = get_messages_for_cleaning(
         user_email=user_email, clean_process_key=clean_process_key)
     for chunk_ids in all_messages:
