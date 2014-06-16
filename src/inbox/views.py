@@ -125,6 +125,8 @@ def oauth_callback():
     primary_domain.credentials = credentials.to_json()
     if credentials.refresh_token:
         primary_domain.refresh_token = credentials.refresh_token
+    user = users.get_current_user()
+    primary_domain.admin_email = user.email()
     primary_domain.put()
 
     return redirect(url_for('settings'))
@@ -265,4 +267,3 @@ def server_error(e):
 @app.errorhandler(403)
 def unauthorized(e):
     return render_template('403.html'), 403
-

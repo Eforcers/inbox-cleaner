@@ -52,3 +52,20 @@ STATUS_CHOICES = [
 ]
 
 ATTACHMENT_FOLDER = 'Adjuntos'
+
+GMAIL_PROPERTIES = [
+    {'\\\\Inbox': 'isInbox'},
+    {'\\\\Sent': 'isSent'},
+    {'\\\\Starred': 'isStarred'},
+    {'\\\\Draft': 'isDraft'},
+    {'\\\\Unread': 'isUnread'}
+]
+
+GMAIL_PROPERTY_NAMES = [
+    '\\\\Inbox',
+    '\\\\Sent',
+    '\\\\Starred',
+    '\\\\Draft',
+    '\\\\Unread',
+    '\\\\Important'
+]

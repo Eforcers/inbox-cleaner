@@ -317,11 +317,13 @@ class IMAPHelper:
     def remove_message_label(self, msg_id=None, prev_label=None):
         result, data = self.mail_connection.uid('STORE', msg_id, '-X-GM-LABELS',
                                                 prev_label)
+        self.mail_connection.expunge()
         return result, data
 
 
     def add_message_labels(self, msg_id=None, new_labels=None):
         formatted_labels = []
+        new_labels = [] if new_labels is None else new_labels
         for label in new_labels:
             formatted_labels.append(label.strip('"'))
         labels_string = '"' + '" "'.join(formatted_labels) + '"'
@@ -336,4 +338,56 @@ class IMAPHelper:
     def delete_message(self, msg_id=None):
         self.mail_connection.uid('COPY', msg_id,
                                  self.all_labels[constants.GMAIL_TRASH_KEY])
+        self.mail_connection.store(msg_id, '+FLAGS', '\\Deleted')
+        # self.mail_connection.uid('STORE', msg_id, '+FLAGS', '\\Deleted')
         self.mail_connection.expunge()
+
+class MigrationHelper(OAuthServiceHelper):
+    """ Google Directory API helper class"""
+
+    def __init__(self, credentials_json=None, refresh_token=None):
+        OAuthServiceHelper.__init__(self, credentials_json, refresh_token)
+        self.service = build('admin', 'email_migration_v2', http=self.http)
+
+    def migrate_mail(self, user_email=None, msg=None, labels=None):
+        labels = [] if labels is None else labels
+        new_labels = []
+        user_labels = []
+
+        properties = constants.GMAIL_PROPERTY_NAMES
+
+        for label in labels:
+            new_label = label.strip('"')
+            new_labels.append(new_label)
+            if new_label not in properties:
+                user_labels.append(label)
+
+        body = {
+            "kind": "mailItem",
+            "labels": user_labels
+        }
+
+        for property in constants.GMAIL_PROPERTIES:
+            if property.keys()[0] in new_labels:
+                body[property.values()[0]] = True
+
+        mime_type = 'message/rfc822'
+
+        content = msg.as_string()
+        content = content.replace('Message-ID', 'Old-ID')
+
+        media_body = MediaIoBaseUpload(
+            StringIO.StringIO(content), mime_type)
+
+        try:
+            email = self.service.mail().insert(
+                userKey=user_email,
+                body=body,
+                media_body=media_body
+            ).execute()
+
+            return True
+        except Exception as e:
+            logging.error("Error migration email for user %s" % (
+                user_email))
+            return False

@@ -5,6 +5,7 @@ import email
 from google.appengine.ext import deferred
 
 import constants
+from inbox.helpers import MigrationHelper
 import secret_keys
 from helpers import EmailSettingsHelper, IMAPHelper, DriveHelper
 from models import ProcessedUser, MoveProcess, CleanUserProcess, \
@@ -188,7 +189,8 @@ def schedule_user_move(user_email=None, tag=None, move_process_key=None,
                            process_id=move_process_key.id())
 
 
-def clean_message(msg_id='', imap=None, drive=None, folder_id=None,
+def clean_message(msg_id='', imap=None, drive=None,
+                  migration=None, folder_id=None,
                   user_email=None):
     result, message = imap.get_message(msg_id=msg_id)
     mail_date = imap.get_date(msg_id=msg_id)
@@ -226,7 +228,7 @@ def clean_message(msg_id='', imap=None, drive=None, folder_id=None,
                     drive_url = inserted_file['downloadUrl']
                 file_id = inserted_file['id']
             elif meta:
-                drive_url = meta['downloadUrl']
+                drive_url = meta['alternateLink']
                 file_id = meta['id']
 
             permission = drive.insert_permission(file_id=file_id,
@@ -245,11 +247,12 @@ def clean_message(msg_id='', imap=None, drive=None, folder_id=None,
         mail.attach(new_payload)
 
     # Send new mail
+    result = migration.migrate_mail(user_email=user_email, msg=mail,
+                                    labels=labels)
 
     # Then delete previous email
+    imap.delete_message(msg_id=msg_id)
 
-    # For tests only - remove later
-    # result, data = imap.mail_connection.append('prueba', None, mail_date, mail.as_string())
     return True
 
 
@@ -265,9 +268,9 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(),
         imap.login(email=user_email, password=process.source_password)
         imap.select()
 
-        try:
-            primary_domain = PrimaryDomain.get_or_create(
+        primary_domain = PrimaryDomain.get_or_create(
                 secret_keys.OAUTH2_CONSUMER_KEY)
+        try:
             drive = DriveHelper(credentials_json=primary_domain.credentials,
                                 admin_email=primary_domain.admin_email,
                                 refresh_token=primary_domain.refresh_token)
@@ -283,10 +286,20 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(),
                 "Couldn't authenticate drive for user %s" % user_email)
             raise e
 
+        try:
+            migration = MigrationHelper(
+                credentials_json=primary_domain.credentials,
+                refresh_token=primary_domain.refresh_token)
+        except Exception as e:
+            logging.error(
+                "Couldn't authenticate migration api for user %s" % user_email)
+            raise e
+
         for message_id in chunk_ids:
             try:
                 result = clean_message(msg_id=message_id, imap=imap,
                                        drive=drive,
+                                       migration=migration,
                                        folder_id=sub_folder['id'],
                                        user_email=user_email)
                 if result:

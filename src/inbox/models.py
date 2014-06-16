@@ -25,6 +25,7 @@ class PrimaryDomain(ndb.Model):
     # OAuth credentials and token for the domain domain
     credentials = ndb.TextProperty(indexed=False)
     refresh_token = ndb.StringProperty(indexed=False)
+    admin_email = ndb.StringProperty(indexed=False)
 
     @staticmethod
     def get_or_create(domain_name):
