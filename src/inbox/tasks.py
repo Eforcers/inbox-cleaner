@@ -225,7 +225,7 @@ def clean_message(msg_id='', imap=None, drive=None,
                                                   content=attachment,
                                                   parent_id=folder_id)
                 if inserted_file:
-                    drive_url = inserted_file['downloadUrl']
+                    drive_url = inserted_file['alternateLink']
                 file_id = inserted_file['id']
             elif meta:
                 drive_url = meta['alternateLink']
