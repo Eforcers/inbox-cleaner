@@ -1,7 +1,8 @@
+import time
 from inbox import constants
 from inbox.models import PrimaryDomain
 from tests import AppEngineFlaskTestCase
-from inbox.helpers import IMAPHelper, DriveHelper
+from inbox.helpers import IMAPHelper, DriveHelper, MigrationHelper
 from secret_keys import (
     TEST_LOGIN, TEST_PASS, TEST_OAUTH2_CONSUMER_KEY,
     TEST_OAUTH2_CONSUMER_SECRET, TEST_PRIMARY_CREDENTIALS,
@@ -10,6 +11,8 @@ from secret_keys import (
 )
 from inbox.util import OAuthEntity
 import mock
+from fixtures import RFC_822_TEST
+import email
 
 class ImapHelperTestCase(AppEngineFlaskTestCase):
     def test_login(self):
@@ -196,3 +199,81 @@ class DriveHelperTestCase(AppEngineFlaskTestCase):
         self.assertNotEquals(None, permission, "Permission not set")
 
         drive.service.files().delete(fileId=created_file['id']).execute()
+
+class MigrationHelperTestCase(AppEngineFlaskTestCase):
+
+    def test_init_and_insert(self):
+        msg = email.message_from_string(RFC_822_TEST)
+        # Test wrong credentials
+        try:
+            migration = MigrationHelper(
+                credentials_json=TEST_FAKE_PRIMARY_CREDENTIALS,
+                refresh_token='')
+            result = migration.migrate_mail(
+                user_email='administrador@eforcers.com.co',
+                msg=msg)
+            if not result:
+                assert False
+        except:
+            pass
+
+        # And then the right ones
+        imap = IMAPHelper()
+        imap.oauth1_2lo_login(user_email='administrador@eforcers.com.co')
+
+        messages = imap.list_messages(
+                           criteria='pruebamigration-uniquehash-34lkj3lk5j3l4kj3lk4j')
+
+        prev_number_messages = len(messages)
+
+        # Delete messages from previous tests
+        for message in messages:
+            result, label_data = imap.get_message_labels(msg_id=message)
+            if not result:
+                assert False
+                imap.remove_message_label(
+                    msg_id=message, prev_label='integration-tests')
+            imap.delete_message(msg_id=message)
+
+        messages = imap.list_messages(
+                           criteria='pruebamigration-uniquehash-34lkj3lk5j3l4kj3lk4j')
+
+        prev_number_messages = len(messages)
+
+        self.assertEquals(0, prev_number_messages,
+                          "Message cleanup wasn't executed")
+
+        migration = MigrationHelper(
+                credentials_json=TEST_PRIMARY_CREDENTIALS,
+                refresh_token=TEST_PRIMARY_REFRESH_TOKEN)
+        result = migration.migrate_mail(
+            user_email='administrador@eforcers.com.co',
+            msg=msg, labels=['integration-tests'])
+
+        if not result:
+            assert False
+
+        time.sleep(15)
+
+        messages = imap.list_messages(
+                           criteria='pruebamigration-uniquehash-34lkj3lk5j3l4kj3lk4j')
+        number_messages = len(messages)
+
+        if len(messages) == 0:
+            messages = imap.list_messages(
+                           criteria='pruebamigration-uniquehash-34lkj3lk5j3l4kj3lk4j',
+                           only_from_trash=True)
+            number_messages = len(messages)
+
+        self.assertEquals(1, number_messages,
+                          "Message cleanup wasn't executed")
+
+        for message in messages:
+            result, label_data = imap.get_message_labels(msg_id=message)
+            if not result:
+                assert False
+            labels = (((label_data[0].split('('))[2].split(')'))[0]).split()
+            self.assertIn('integration-tests', labels,
+                          "Label wasn't preserved")
+
+        imap.close()

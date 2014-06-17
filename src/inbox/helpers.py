@@ -350,7 +350,8 @@ class MigrationHelper(OAuthServiceHelper):
         self.service = build('admin', 'email_migration_v2', http=self.http)
 
     def migrate_mail(self, user_email=None, msg=None, labels=None):
-        labels = [] if labels is None else labels
+        if labels is None or type(labels) is not list:
+            labels = []
         new_labels = []
         user_labels = []
 
@@ -380,7 +381,7 @@ class MigrationHelper(OAuthServiceHelper):
             StringIO.StringIO(content), mime_type)
 
         try:
-            email = self.service.mail().insert(
+            self.service.mail().insert(
                 userKey=user_email,
                 body=body,
                 media_body=media_body
@@ -388,6 +389,6 @@ class MigrationHelper(OAuthServiceHelper):
 
             return True
         except Exception as e:
-            logging.error("Error migration email for user %s" % (
-                user_email))
+            logging.error("Error migration email for user %s, error: %s" % (
+                user_email, e))
             return False
