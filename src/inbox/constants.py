@@ -26,6 +26,7 @@ OAUTH2_SCOPES = 'https://www.googleapis.com/auth/userinfo.email ' \
 
 MENU_ITEMS = [
     ('admin_index', 'Home'),
+    ('settings','Settings')
 ]
 
 IMAP_SERVER = 'imap.gmail.com'

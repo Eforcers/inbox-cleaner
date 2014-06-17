@@ -84,7 +84,7 @@ class LocalSeleniumTestCase(unittest.TestCase):
     def test_list(self):
         driver = self.driver
         fixtures.add_example_clean_process_users(amount=45)
-        self.default_login('/process')
+        self.default_login('/admin/process')
         self.assert_element_visible(
             By.ID,'processes-list','Process list title does not appears')
 
@@ -124,17 +124,21 @@ class LocalSeleniumTestCase(unittest.TestCase):
 
     def test_create(self):
         driver = self.driver
-        self.default_login('/process')
+        self.default_login('/admin/process')
         driver.find_element_by_id('process_name').send_keys('process1')
         driver.find_element_by_id('source_email').send_keys('test')
-        driver.find_element_by_id('source_password').send_keys('source_password')
+        driver.find_element_by_id('source_password').send_keys(
+            secret_keys.ADMIN_PASSWORD)
         driver.find_element_by_id('search_criteria').send_keys('search_criteria')
         driver.find_element_by_id('add-process-button').click()
         self.assert_element_invisible(By.CLASS_NAME, 'alert-success','object '
                                                                      'appears')
 
-        driver.find_element_by_id('source_email').send_keys('test@test.com')
+        driver.find_element_by_id('source_email').clear()
+        driver.find_element_by_id('source_email').send_keys(
+            secret_keys.ADMIN_USERNAME)
         driver.find_element_by_id('add-process-button').click()
+        time.sleep(2)
         self.assert_element_visible(By.CLASS_NAME, 'alert-success','Object '
                                                                    'does not '
                                                                    'appears')
