@@ -95,17 +95,6 @@ class DriveHelperTestCase(AppEngineFlaskTestCase):
     def test_init(self):
         admin_email = TEST_PRIMARY_ADMIN_EMAIL
         
-        # Test wrong credentials
-        try:
-            drive = DriveHelper(credentials_json=TEST_FAKE_PRIMARY_CREDENTIALS,
-                        admin_email=admin_email,
-                        refresh_token='')
-            drive.get_folder('anything')
-            assert False
-        except:
-            pass
-
-        # And then the right ones
         drive = DriveHelper(credentials_json=TEST_PRIMARY_CREDENTIALS,
                     admin_email=admin_email,
                     refresh_token=TEST_PRIMARY_REFRESH_TOKEN)
@@ -204,27 +193,12 @@ class MigrationHelperTestCase(AppEngineFlaskTestCase):
 
     def test_init_and_insert(self):
         msg = email.message_from_string(RFC_822_TEST)
-        # Test wrong credentials
-        try:
-            migration = MigrationHelper(
-                credentials_json=TEST_FAKE_PRIMARY_CREDENTIALS,
-                refresh_token='')
-            result = migration.migrate_mail(
-                user_email='administrador@eforcers.com.co',
-                msg=msg)
-            if not result:
-                assert False
-        except:
-            pass
 
-        # And then the right ones
         imap = IMAPHelper()
         imap.oauth1_2lo_login(user_email='administrador@eforcers.com.co')
 
         messages = imap.list_messages(
                            criteria='pruebamigration-uniquehash-34lkj3lk5j3l4kj3lk4j')
-
-        prev_number_messages = len(messages)
 
         # Delete messages from previous tests
         for message in messages:
@@ -237,11 +211,12 @@ class MigrationHelperTestCase(AppEngineFlaskTestCase):
 
         messages = imap.list_messages(
                            criteria='pruebamigration-uniquehash-34lkj3lk5j3l4kj3lk4j')
-
         prev_number_messages = len(messages)
 
         self.assertEquals(0, prev_number_messages,
                           "Message cleanup wasn't executed")
+
+        time.sleep(1)
 
         migration = MigrationHelper(
                 credentials_json=TEST_PRIMARY_CREDENTIALS,

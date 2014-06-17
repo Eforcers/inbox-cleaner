@@ -18,6 +18,7 @@ from gdata.apps.emailsettings.client import EmailSettingsClient
 from gdata.gauth import OAuth2TokenFromCredentials
 from inbox import app
 import constants
+from email.parser import HeaderParser
 
 
 class OAuthDanceHelper:
@@ -335,12 +336,30 @@ class IMAPHelper:
         result, data = self.mail_connection.uid('FETCH', msg_id, 'X-GM-LABELS')
         return result, data
 
-    def delete_message(self, msg_id=None):
+    def delete_message(self, msg_id=None, criteria='', mailbox_is_trash=False):
+        data = self.mail_connection.uid('FETCH',
+            msg_id, '(BODY[HEADER.FIELDS (SUBJECT FROM)])')
+        header_data = data[1][0][1]
+        parser = HeaderParser()
+        header = parser.parsestr(header_data)
+        subject = header['Subject']
+
         self.mail_connection.uid('COPY', msg_id,
                                  self.all_labels[constants.GMAIL_TRASH_KEY])
-        self.mail_connection.store(msg_id, '+FLAGS', '\\Deleted')
-        # self.mail_connection.uid('STORE', msg_id, '+FLAGS', '\\Deleted')
-        self.mail_connection.expunge()
+
+        self.select(only_from_trash=True)
+
+        criteria = "subject:%s %s" % (subject, criteria)
+
+        messages = self.list_messages(
+            criteria=criteria, only_from_trash=True)
+
+        for m in messages:
+            result, data = self.mail_connection.uid('STORE', m, '+FLAGS', '\\Deleted')
+            self.mail_connection.expunge()
+        if not mailbox_is_trash:
+            self.select()
+
 
 class MigrationHelper(OAuthServiceHelper):
     """ Google Directory API helper class"""

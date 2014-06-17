@@ -191,7 +191,9 @@ def schedule_user_move(user_email=None, tag=None, move_process_key=None,
 
 def clean_message(msg_id='', imap=None, drive=None,
                   migration=None, folder_id=None,
-                  user_email=None):
+                  user_email=None, process_id=None):
+    process = CleanUserProcess.get_by_id(process_id)
+    criteria = process.search_criteria
     result, message = imap.get_message(msg_id=msg_id)
     mail_date = imap.get_date(msg_id=msg_id)
     if result != 'OK':
@@ -225,7 +227,7 @@ def clean_message(msg_id='', imap=None, drive=None,
                                                   content=attachment,
                                                   parent_id=folder_id)
                 if inserted_file:
-                    drive_url = inserted_file['downloadUrl']
+                    drive_url = inserted_file['alternateLink']
                 file_id = inserted_file['id']
             elif meta:
                 drive_url = meta['alternateLink']
@@ -251,7 +253,7 @@ def clean_message(msg_id='', imap=None, drive=None,
                                     labels=labels)
 
     # Then delete previous email
-    imap.delete_message(msg_id=msg_id)
+    imap.delete_message(msg_id=msg_id, criteria=criteria)
 
     return True
 
@@ -301,7 +303,8 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(),
                                        drive=drive,
                                        migration=migration,
                                        folder_id=sub_folder['id'],
-                                       user_email=user_email)
+                                       user_email=user_email,
+                                       process_id=process_id)
                 if result:
                     counter.load_and_increment_counter(
                         'cleaning_%s_ok_count' % (user_email),
