@@ -14,7 +14,7 @@
         <div style="margin-top:60px" class="col-md-12">
         <h1 id="processes-list">Processes List</h1>
         <div>&nbsp;</div>
-        <table class="table table-bordered table-striped">
+        <table class="table table-bordered table-striped" id="process-list">
             <thead>
                 <tr>
                     <th>Name</th>
@@ -25,15 +25,13 @@
                 </tr>
             </thead>
             <tbody>
-                {% for birthday in birthdays %}
-                {% set birthday_id = birthday.key.id() %}
+                {% for clean_process in clean_processes %}
                 <tr>
-
-                    <td>{{ birthday.display_name }}</td>
-                    <td class="nowrap">{{ birthday.timestamp.strftime('%b %d, %Y %I:%M %p') }}</td>
-                    <td>
-                        <a href="{{ url_for('edit_birthday', birthday_id=birthday_id) }}" class="btn">Edit</a>
-                    </td>
+                    <td>{{ clean_process.process_name }}</td>
+                    <td>{{ clean_process.source_email }}</td>
+                    <td>{{ clean_process.destination_message_email }}</td>
+                    <td>{{ clean_process.search_criteria }}</td>
+                    <td>{{ clean_process.status }}</td>
                 </tr>
                 {% else %}
                 <tr><td colspan="7">No processes yet</td></tr>
