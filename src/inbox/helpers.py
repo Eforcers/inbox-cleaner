@@ -19,6 +19,7 @@ from gdata.gauth import OAuth2TokenFromCredentials
 from inbox import app
 import constants
 from email.parser import HeaderParser
+import time
 
 
 class OAuthDanceHelper:
@@ -346,6 +347,10 @@ class IMAPHelper:
 
         self.mail_connection.uid('COPY', msg_id,
                                  self.all_labels[constants.GMAIL_TRASH_KEY])
+
+        # Sometimes the copy doesn't get reflected immediately
+        # Also, the email migration API has a 1QPS limit per account
+        time.sleep(1)
 
         self.select(only_from_trash=True)
 

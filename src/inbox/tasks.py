@@ -6,6 +6,7 @@ from google.appengine.ext import deferred
 
 import constants
 from inbox.helpers import MigrationHelper
+from inbox.models import CleanMessageProcess, CleanAttachmentProcess
 import secret_keys
 from helpers import EmailSettingsHelper, IMAPHelper, DriveHelper
 from models import ProcessedUser, MoveProcess, CleanUserProcess, \
@@ -194,14 +195,21 @@ def clean_message(msg_id='', imap=None, drive=None,
                   user_email=None, process_id=None):
     process = CleanUserProcess.get_by_id(process_id)
     criteria = process.search_criteria
+
+    msg_process = CleanMessageProcess.get_or_create(msg_id, process_id)
+    if msg_process.status == constants.FINISHED:
+        return True
+
     result, message = imap.get_message(msg_id=msg_id)
-    mail_date = imap.get_date(msg_id=msg_id)
+
     if result != 'OK':
         raise
+
     result, label_data = imap.get_message_labels(msg_id=msg_id)
     labels = (((label_data[0].split('('))[2].split(')'))[0]).split()
     mail = email.message_from_string(message[0][1])
     attachments = []
+    number_of_attachments = 0
 
     if mail.get_content_maintype() == 'multipart':
         for part in mail.walk():
@@ -210,38 +218,54 @@ def clean_message(msg_id='', imap=None, drive=None,
             if part.get('Content-Disposition') is None:
                 continue
 
-            attachment = part.get_payload(decode=True)
-            mime_type = part.get_content_type()
-            filename = part.get_filename()
+            # Is attachment
+            attached = False
+            number_of_attachments += 1
+            attachment_process = CleanAttachmentProcess.get_or_create(
+                msg_id, process_id, number_of_attachments
+            )
 
-            # Send attachment to drive
-            meta = drive.get_metadata(title=filename, parent_id=folder_id)
-            drive_url = ''
             file_id = ''
 
-            if ((meta and int(meta['fileSize']) != len(attachment) and
-                     meta['properties']) or
-                    not meta):
+            if (attachment_process.status == constants.FINISHED and
+                attachment_process.url and
+                attachment_process.filename):
+                attached = True
+                attachments.append(
+                    (attachment_process.url, attachment_process.filename))
+                file_id = attachment_process.file_id
+
+            if not attached:
+                attachment = part.get_payload(decode=True)
+                mime_type = part.get_content_type()
+                filename = part.get_filename()
+
                 inserted_file = drive.insert_file(filename=filename,
                                                   mime_type=mime_type,
                                                   content=attachment,
                                                   parent_id=folder_id)
-                if inserted_file:
-                    drive_url = inserted_file['alternateLink']
+
+                drive_url = inserted_file['alternateLink']
                 file_id = inserted_file['id']
-            elif meta:
-                drive_url = meta['alternateLink']
-                file_id = meta['id']
+
+                attachment_process.url = drive_url
+                attachment_process.file_id = file_id
+                attachment_process.status = constants.FINISHED
+                attachment_process.filename = filename
+                attachment_process.put()
+
+                attachments.append((drive_url, filename))
 
             permission = drive.insert_permission(file_id=file_id,
                                                  value=user_email,
                                                  type='user', role='reader')
 
-            attachments.append((drive_url, filename))
-
             part.set_payload("")
             for header in part.keys():
                 part.__delitem__(header)
+
+    msg_process.status = constants.DUPLICATED
+    msg_process.put()
 
     for url, filename in attachments:
         body_suffix = '<a href="%s">%s</a>' % (url, filename)
@@ -251,9 +275,20 @@ def clean_message(msg_id='', imap=None, drive=None,
     # Send new mail
     result = migration.migrate_mail(user_email=user_email, msg=mail,
                                     labels=labels)
+    if result:
+        msg_process.status = constants.MIGRATED
+        msg_process.put()
+    else:
+        raise Exception("Migration unsuccessful!")
 
     # Then delete previous email
-    imap.delete_message(msg_id=msg_id, criteria=criteria)
+    if msg_process.status == constants.MIGRATED:
+        imap.delete_message(msg_id=msg_id, criteria=criteria)
+    else:
+        raise Exception("Deletion unsuccessful")
+
+    msg_process.status = constants.FINISHED
+    msg_process.put()
 
     return True
 
@@ -352,6 +387,7 @@ def schedule_user_cleaning(user_email=None, clean_process_key=None,
                            admin_email=None):
     all_messages = get_messages_for_cleaning(
         user_email=user_email, clean_process_key=clean_process_key)
+
     for chunk_ids in all_messages:
         if len(chunk_ids) > 0:
             logging.info('Scheduling user [%s] messages cleaning', user_email)

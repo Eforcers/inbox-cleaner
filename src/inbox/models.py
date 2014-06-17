@@ -67,12 +67,50 @@ class CleanUserProcess(ndb.Model):
 
 
 class CleanMessageProcess(ndb.Model):
-    email = ndb.StringProperty()
+    msg_id = ndb.StringProperty()
     status = ndb.StringProperty()
+    clean_process_id = ndb.IntegerProperty()
 
+    @staticmethod
+    def get_or_create(msg_id, process_id):
+        clean_message = CleanMessageProcess.query(ndb.AND(
+            CleanMessageProcess.msg_id == msg_id,
+            CleanMessageProcess.clean_process_id == process_id)
+        ).get()
+        if not clean_message:
+            clean_message = CleanMessageProcess(
+                msg_id=msg_id,
+                status=constants.STARTED,
+                clean_process_id = process_id)
+            clean_message.put()
+        return clean_message
 
 class CleanAttachmentProcess(ndb.Model):
+    msg_id = ndb.StringProperty()
+    attachment_number = ndb.IntegerProperty()
     status = ndb.StringProperty()
+    msg_process_id = ndb.IntegerProperty()
+    url = ndb.StringProperty(indexed=False)
+    filename = ndb.StringProperty(indexed=False)
+    file_id = ndb.StringProperty(indexed=False)
+
+    @staticmethod
+    def get_or_create(msg_id,
+                      msg_process_id,
+                      attachment_number):
+        clean_attachment = CleanAttachmentProcess.query(ndb.AND(
+            CleanAttachmentProcess.msg_id == msg_id,
+            CleanAttachmentProcess.msg_process_id == msg_process_id,
+            CleanAttachmentProcess.attachment_number == attachment_number)
+        ).get()
+        if not clean_attachment:
+            clean_attachment = CleanAttachmentProcess(
+                msg_id=msg_id,
+                status=constants.STARTED,
+                msg_process_id=msg_process_id,
+                attachment_number=attachment_number)
+            clean_attachment.put()
+        return clean_attachment
 
 
 class MoveProcess(ndb.Model):
