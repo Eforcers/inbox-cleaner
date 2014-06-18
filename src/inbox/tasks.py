@@ -5,9 +5,9 @@ import email
 from google.appengine.ext import deferred
 
 import constants
-from inbox.helpers import MigrationHelper
+from inbox.models import CleanMessageProcess, CleanAttachmentProcess
 import secret_keys
-from helpers import EmailSettingsHelper, IMAPHelper, DriveHelper
+from inbox.helpers import EmailSettingsHelper, IMAPHelper, DriveHelper, MigrationHelper
 from models import ProcessedUser, MoveProcess, CleanUserProcess, \
     PrimaryDomain
 from util import chunkify
@@ -68,9 +68,8 @@ def get_messages(user_email=None, tag=None, process_id=None):
     return []
 
 
-def get_messages_for_cleaning(user_email=None, process_id=None,
-                              clean_process_key=None):
-    clean_process = clean_process_key.get()
+def get_messages_for_cleaning(user_email=None, process_id=None):
+    clean_process = CleanUserProcess.get_by_id(process_id)
     imap = IMAPHelper()
     imap.login(email=user_email, password=clean_process.source_password)
     msg_ids = imap.list_messages(criteria=clean_process.search_criteria,
@@ -88,6 +87,13 @@ def get_messages_for_cleaning(user_email=None, process_id=None,
             namespace=str(process_id))
         return [msg_ids[i::n] for i in xrange(n)]
     else:
+        counter.load_and_increment_counter(
+            'cleaning_%s_total_count' % user_email,
+            delta=0,
+            namespace=str(process_id))
+        process = CleanUserProcess.get_by_id(process_id)
+        process.status = constants.FINISHED
+        process.put()
         return []
 
 
@@ -194,14 +200,22 @@ def clean_message(msg_id='', imap=None, drive=None,
                   user_email=None, process_id=None):
     process = CleanUserProcess.get_by_id(process_id)
     criteria = process.search_criteria
+
+    msg_process = CleanMessageProcess.get_or_create(msg_id, process_id)
+    if msg_process.status == constants.FINISHED:
+        return True
+
     result, message = imap.get_message(msg_id=msg_id)
-    mail_date = imap.get_date(msg_id=msg_id)
+
     if result != 'OK':
-        raise
+        raise Exception("Couldn't read message")
+
     result, label_data = imap.get_message_labels(msg_id=msg_id)
+
     labels = (((label_data[0].split('('))[2].split(')'))[0]).split()
     mail = email.message_from_string(message[0][1])
     attachments = []
+    number_of_attachments = 0
 
     if mail.get_content_maintype() == 'multipart':
         for part in mail.walk():
@@ -210,38 +224,69 @@ def clean_message(msg_id='', imap=None, drive=None,
             if part.get('Content-Disposition') is None:
                 continue
 
-            attachment = part.get_payload(decode=True)
-            mime_type = part.get_content_type()
-            filename = part.get_filename()
+            # Is attachment
+            attached = False
+            number_of_attachments += 1
+            attachment_process = CleanAttachmentProcess.get_or_create(
+                msg_id, msg_process.key.id(), number_of_attachments
+            )
 
-            # Send attachment to drive
-            meta = drive.get_metadata(title=filename, parent_id=folder_id)
-            drive_url = ''
             file_id = ''
 
-            if ((meta and int(meta['fileSize']) != len(attachment) and
-                     meta['properties']) or
-                    not meta):
-                inserted_file = drive.insert_file(filename=filename,
+            if (attachment_process.status == constants.FINISHED and
+                attachment_process.url and
+                attachment_process.filename and
+                attachment_process.file_id
+            ):
+                attached = True
+                attachments.append(
+                    (attachment_process.url, attachment_process.filename))
+                file_id = attachment_process.file_id
+
+            if not attached:
+                attachment = part.get_payload(decode=True)
+                mime_type = part.get_content_type()
+                filename = part.get_filename()
+
+                insert_result = drive.insert_file(filename=filename,
                                                   mime_type=mime_type,
                                                   content=attachment,
                                                   parent_id=folder_id)
-                if inserted_file:
-                    drive_url = inserted_file['alternateLink']
-                file_id = inserted_file['id']
-            elif meta:
-                drive_url = meta['alternateLink']
-                file_id = meta['id']
+                if type(insert_result) is Exception:
+                    attachment_process.error_description = (
+                        insert_result.message
+                    )
+                    attachment_process.put()
+                    raise insert_result
 
-            permission = drive.insert_permission(file_id=file_id,
+                drive_url = insert_result['alternateLink']
+                file_id = insert_result['id']
+
+                attachment_process.url = drive_url
+                attachment_process.file_id = file_id
+                attachment_process.status = constants.FINISHED
+                attachment_process.filename = filename
+                attachment_process.put()
+
+                attachments.append((drive_url, filename))
+
+            permission_result = drive.insert_permission(file_id=file_id,
                                                  value=user_email,
-                                                 type='user', role='reader')
+                                                 type='user', role='writer')
 
-            attachments.append((drive_url, filename))
+            if type(permission_result) is Exception:
+                attachment_process.error_description = (
+                    permission_result.message
+                )
+                attachment_process.put()
+                raise permission_result
 
             part.set_payload("")
             for header in part.keys():
                 part.__delitem__(header)
+
+    msg_process.status = constants.DUPLICATED
+    msg_process.put()
 
     for url, filename in attachments:
         body_suffix = '<a href="%s">%s</a>' % (url, filename)
@@ -249,11 +294,25 @@ def clean_message(msg_id='', imap=None, drive=None,
         mail.attach(new_payload)
 
     # Send new mail
-    result = migration.migrate_mail(user_email=user_email, msg=mail,
+    migration_result = migration.migrate_mail(user_email=user_email, msg=mail,
                                     labels=labels)
+    if type(migration_result) is Exception:
+        msg_process.error_description = migration_result.message
+        msg_process.put()
+        raise migration_result
+    else:
+        msg_process.status = constants.MIGRATED
+        msg_process.put()
 
     # Then delete previous email
-    imap.delete_message(msg_id=msg_id, criteria=criteria)
+    delete_result = imap.delete_message(msg_id=msg_id, criteria=criteria)
+    if type(delete_result) is Exception:
+        msg_process.error_description = delete_result.message
+        msg_process.put()
+        raise delete_result
+
+    msg_process.status = constants.FINISHED
+    msg_process.put()
 
     return True
 
@@ -262,6 +321,9 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(),
                    retry_count=0, process_id=None):
     cleaned_successfully = []
     if len(chunk_ids) <= 0:
+        process = CleanUserProcess.get_by_id(process_id)
+        process.status = constants.FINISHED
+        process.put()
         return True
 
     try:
@@ -340,6 +402,8 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(),
                         delta=len(remaining),
                         namespace=str(process_id))
                 break
+        process.status = constants.FINISHED
+        process.put()
     except Exception as e:
         logging.exception('Failed cleaning messages chunk')
         raise e
@@ -348,16 +412,16 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(),
             imap.close()
 
 
-def schedule_user_cleaning(user_email=None, clean_process_key=None,
-                           admin_email=None):
+def schedule_user_cleaning(user_email=None, process_id=None):
     all_messages = get_messages_for_cleaning(
-        user_email=user_email, clean_process_key=clean_process_key)
+        user_email=user_email, process_id=process_id)
+
     for chunk_ids in all_messages:
         if len(chunk_ids) > 0:
             logging.info('Scheduling user [%s] messages cleaning', user_email)
             deferred.defer(clean_messages, user_email=user_email,
                            chunk_ids=chunk_ids,
-                           process_id=clean_process_key.id())
+                           process_id=process_id)
 
 
 def generate_count_report():

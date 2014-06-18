@@ -19,6 +19,7 @@ from gdata.gauth import OAuth2TokenFromCredentials
 from inbox import app
 import constants
 from email.parser import HeaderParser
+import time
 
 
 class OAuthDanceHelper:
@@ -117,7 +118,7 @@ class DriveHelper(OAuthServiceHelper):
             return created_file
         except Exception as e:
             logging.error("Error uploading file %s" % filename)
-            raise e
+            return e
 
     def get_metadata(self, title=None, parent_id=None):
         try:
@@ -148,7 +149,7 @@ class DriveHelper(OAuthServiceHelper):
         except Exception as e:
             logging.error('Error inserting permission for file: %s, error: %s' % (
                 file_id, e))
-            return None
+            return e
 
 class DirectoryHelper(OAuthServiceHelper):
     """ Google Directory API helper class"""
@@ -347,6 +348,10 @@ class IMAPHelper:
         self.mail_connection.uid('COPY', msg_id,
                                  self.all_labels[constants.GMAIL_TRASH_KEY])
 
+        # Sometimes the copy doesn't get reflected immediately
+        # Also, the email migration API has a 1QPS limit per account
+        time.sleep(1)
+
         self.select(only_from_trash=True)
 
         criteria = "subject:%s %s" % (subject, criteria)
@@ -410,4 +415,4 @@ class MigrationHelper(OAuthServiceHelper):
         except Exception as e:
             logging.error("Error migration email for user %s, error: %s" % (
                 user_email, e))
-            return False
+            return e
