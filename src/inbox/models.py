@@ -70,6 +70,7 @@ class CleanMessageProcess(ndb.Model):
     msg_id = ndb.StringProperty()
     status = ndb.StringProperty()
     clean_process_id = ndb.IntegerProperty()
+    error_description = ndb.StringProperty(indexed=False)
 
     @staticmethod
     def get_or_create(msg_id, process_id):
@@ -93,6 +94,7 @@ class CleanAttachmentProcess(ndb.Model):
     url = ndb.StringProperty(indexed=False)
     filename = ndb.StringProperty(indexed=False)
     file_id = ndb.StringProperty(indexed=False)
+    error_description = ndb.StringProperty(indexed=False)
 
     @staticmethod
     def get_or_create(msg_id,

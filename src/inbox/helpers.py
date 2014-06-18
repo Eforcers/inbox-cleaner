@@ -118,7 +118,7 @@ class DriveHelper(OAuthServiceHelper):
             return created_file
         except Exception as e:
             logging.error("Error uploading file %s" % filename)
-            raise e
+            return e
 
     def get_metadata(self, title=None, parent_id=None):
         try:
@@ -149,7 +149,7 @@ class DriveHelper(OAuthServiceHelper):
         except Exception as e:
             logging.error('Error inserting permission for file: %s, error: %s' % (
                 file_id, e))
-            return None
+            return e
 
 class DirectoryHelper(OAuthServiceHelper):
     """ Google Directory API helper class"""
@@ -415,4 +415,4 @@ class MigrationHelper(OAuthServiceHelper):
         except Exception as e:
             logging.error("Error migration email for user %s, error: %s" % (
                 user_email, e))
-            return False
+            return e
