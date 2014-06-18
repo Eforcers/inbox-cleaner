@@ -130,7 +130,10 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
                 logging.exception(
                     'Failed moving message range IDs [%s-%s] for user [%s]',
                     chunk[0], chunk[-1], user_email)
-                remaining = list(set(chunk_ids) - set(moved_successfully))
+                remaining = []
+                for original_chunk in chunk_ids:
+                    if original_chunk not in moved_successfully:
+                        remaining.append(original_chunk)
                 # Keep retrying if messages are being moved
                 if retry_count >= 3 and len(moved_successfully) == 0:
                     logging.error('Giving up with remaining [%s] messages for '
@@ -396,7 +399,10 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(),
                 logging.exception(
                     'Failed cleaning individual message ID [%s] for user [%s]',
                     message_id, user_email)
-                remaining = list(set(chunk_ids) - set(cleaned_successfully))
+                remaining = []
+                for original_chunk in chunk_ids:
+                    if original_chunk not in cleaned_successfully:
+                        remaining.append(original_chunk)
                 if retry_count < 3:
                     logging.info(
                         'Scheduling [%s] remaining cleaning messages for user [%s]',
