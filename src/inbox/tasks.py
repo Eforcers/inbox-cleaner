@@ -107,8 +107,7 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
         imap = IMAPHelper()
         imap.oauth1_2lo_login(user_email=user_email)
         imap.select(only_from_trash=True)
-        for chunk in chunkify(chunk_ids,
-                              chunk_size=constants.MESSAGE_BATCH_SIZE):
+        for chunk in chunk_ids:
             try:
                 result, data = imap.copy_message(
                     msg_id="%s:%s" % (chunk[0], chunk[-1]),
@@ -144,6 +143,10 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
                     logging.info(
                         'Scheduling [%s] remaining messages for user [%s]',
                         len(remaining), user_email)
+                    new_chunk_ids = []
+                    for chunk in chunkify(remaining,
+                                      chunk_size=constants.MESSAGE_BATCH_SIZE):
+                        new_chunk_ids.append([chunk[0], chunk[-1]])
                     deferred.defer(move_messages, user_email=user_email,
                                    tag=tag,
                                    chunk_ids=remaining,
@@ -189,9 +192,13 @@ def schedule_user_move(user_email=None, tag=None, move_process_key=None,
     for chunk_ids in get_messages(user_email=user_email, tag=tag,
                                   process_id=move_process_key.id()):
         if len(chunk_ids) > 0:
+            new_chunk_ids = []
+            for chunk in chunkify(chunk_ids,
+                              chunk_size=constants.MESSAGE_BATCH_SIZE):
+                new_chunk_ids.append([chunk[0], chunk[-1]])
             logging.info('Scheduling user [%s] messages move', user_email)
             deferred.defer(move_messages, user_email=user_email, tag=tag,
-                           chunk_ids=chunk_ids,
+                           chunk_ids=new_chunk_ids,
                            process_id=move_process_key.id())
 
 
