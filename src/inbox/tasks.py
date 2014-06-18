@@ -98,7 +98,7 @@ def get_messages_for_cleaning(user_email=None, process_id=None):
 
 
 def move_messages(user_email=None, tag=None, chunk_ids=list(),
-                  process_id=None, retry_count=0):
+                  process_id=None, retry_count=0, chunk_sizes=None):
     moved_successfully = []
     imap = None
     if len(chunk_ids) <= 0:
@@ -107,7 +107,7 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
         imap = IMAPHelper()
         imap.oauth1_2lo_login(user_email=user_email)
         imap.select(only_from_trash=True)
-        for chunk in chunk_ids:
+        for i, chunk in enumerate(chunk_ids):
             try:
                 result, data = imap.copy_message(
                     msg_id="%s:%s" % (chunk[0], chunk[-1]),
@@ -116,12 +116,12 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
                 if result == 'OK':
                     counter.load_and_increment_counter(
                         '%s_ok_count' % (user_email),
-                        namespace=str(process_id), delta=len(chunk))
+                        namespace=str(process_id), delta=chunk_sizes[i])
                     moved_successfully.extend(chunk)
                 else:
                     counter.load_and_increment_counter(
                         '%s_error_count' % user_email,
-                        namespace=str(process_id), delta=len(chunk))
+                        namespace=str(process_id), delta=chunk_sizes[i])
                     logging.error(
                         'Error moving message IDs [%s-%s] for user [%s]: '
                         'Result [%s] data [%s]', chunk[0], chunk[-1],
@@ -144,14 +144,17 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
                         'Scheduling [%s] remaining messages for user [%s]',
                         len(remaining), user_email)
                     new_chunk_ids = []
+                    chunk_sizes = []
                     for chunk in chunkify(remaining,
                                       chunk_size=constants.MESSAGE_BATCH_SIZE):
                         new_chunk_ids.append([chunk[0], chunk[-1]])
+                        chunk_sizes.append(len(chunk))
                     deferred.defer(move_messages, user_email=user_email,
                                    tag=tag,
                                    chunk_ids=remaining,
                                    process_id=process_id,
-                                   retry_count=retry_count + 1)
+                                   retry_count=retry_count + 1,
+                                   chunk_sizes=chunk_sizes)
                 break
     except Exception as e:
         logging.exception('Authentication, connection or select problem for '
@@ -193,13 +196,16 @@ def schedule_user_move(user_email=None, tag=None, move_process_key=None,
                                   process_id=move_process_key.id()):
         if len(chunk_ids) > 0:
             new_chunk_ids = []
+            chunk_sizes = []
             for chunk in chunkify(chunk_ids,
                               chunk_size=constants.MESSAGE_BATCH_SIZE):
                 new_chunk_ids.append([chunk[0], chunk[-1]])
+                chunk_sizes.append(len(chunk))
             logging.info('Scheduling user [%s] messages move', user_email)
             deferred.defer(move_messages, user_email=user_email, tag=tag,
                            chunk_ids=new_chunk_ids,
-                           process_id=move_process_key.id())
+                           process_id=move_process_key.id(),
+                           chunk_sizes=chunk_sizes)
 
 
 def clean_message(msg_id='', imap=None, drive=None,
