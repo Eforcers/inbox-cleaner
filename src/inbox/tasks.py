@@ -5,10 +5,9 @@ import email
 from google.appengine.ext import deferred
 
 import constants
-from inbox.helpers import MigrationHelper
 from inbox.models import CleanMessageProcess, CleanAttachmentProcess
 import secret_keys
-from helpers import EmailSettingsHelper, IMAPHelper, DriveHelper
+from inbox.helpers import EmailSettingsHelper, IMAPHelper, DriveHelper, MigrationHelper
 from models import ProcessedUser, MoveProcess, CleanUserProcess, \
     PrimaryDomain
 from util import chunkify
@@ -212,6 +211,7 @@ def clean_message(msg_id='', imap=None, drive=None,
         raise Exception("Couldn't read message")
 
     result, label_data = imap.get_message_labels(msg_id=msg_id)
+
     labels = (((label_data[0].split('('))[2].split(')'))[0]).split()
     mail = email.message_from_string(message[0][1])
     attachments = []
