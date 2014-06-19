@@ -250,7 +250,7 @@ class IMAPHelper:
     def list_messages(self, criteria='', only_with_attachments=False,
                       only_from_trash=False):
         self.select(only_from_trash=only_from_trash)
-        query = ' '
+        query = '-in:draft '
         if only_with_attachments:
             query += 'has:attachment '
 
@@ -405,7 +405,7 @@ class MigrationHelper(OAuthServiceHelper):
             StringIO.StringIO(content), mime_type)
 
         try:
-            self.service.mail().insert(
+            result = self.service.mail().insert(
                 userKey=user_email,
                 body=body,
                 media_body=media_body

@@ -12,6 +12,7 @@ from models import ProcessedUser, MoveProcess, CleanUserProcess, \
     PrimaryDomain
 from util import chunkify
 from livecount import counter
+from google.appengine.ext import ndb
 
 
 def get_messages(user_email=None, tag=None, process_id=None):
@@ -321,17 +322,47 @@ def clean_message(msg_id='', imap=None, drive=None,
         msg_process.put()
 
     # Then delete previous email
-    delete_result = imap.delete_message(msg_id=msg_id, criteria=criteria)
-    if type(delete_result) is Exception:
-        msg_process.error_description = delete_result.message
-        msg_process.put()
-        raise delete_result
-
-    msg_process.status = constants.FINISHED
-    msg_process.put()
+    deferred.defer(delayed_delete_message, msg_id=msg_id,
+                   process_id=process_id, _countdown=15)
 
     return True
 
+def delayed_delete_message(msg_id=None, process_id=None):
+    process = CleanUserProcess.get_by_id(process_id)
+    criteria = process.search_criteria
+
+    msg_process = CleanMessageProcess.query(ndb.AND(
+        CleanMessageProcess.msg_id == msg_id,
+        CleanMessageProcess.clean_process_id == process_id)
+    ).get()
+
+    imap = IMAPHelper()
+    imap.login(process.source_email, process.source_password)
+    imap.select()
+
+    delete_result = imap.delete_message(msg_id=msg_id, criteria=criteria)
+    imap.close()
+
+    if type(delete_result) is Exception:
+        msg_process.error_description = delete_result.message
+        msg_process.put()
+    else:
+        msg_process.status = constants.FINISHED
+        msg_process.put()
+
+    all_done = True
+
+    all_cleaning_messages = CleanMessageProcess.query(
+        CleanMessageProcess.clean_process_id == process_id
+    ).fetch()
+
+    for message in all_cleaning_messages:
+        if not message.status == constants.FINISHED:
+            all_done = False
+
+    if all_done:
+        process.status = constants.FINISHED
+        process.put()
 
 def clean_messages(user_email=None, password=None, chunk_ids=list(),
                    retry_count=0, process_id=None):
@@ -421,8 +452,7 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(),
                         delta=len(remaining),
                         namespace=str(process_id))
                 break
-        process.status = constants.FINISHED
-        process.put()
+
     except Exception as e:
         logging.exception('Failed cleaning messages chunk')
         raise e
