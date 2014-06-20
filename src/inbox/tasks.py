@@ -102,6 +102,8 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
                   process_id=None, retry_count=0, chunk_sizes=None):
     moved_successfully = []
     imap = None
+    number_moved_successfully = 0
+    number_moved_unsuccessfully = 0
     if len(chunk_ids) <= 0:
         return True
     try:
@@ -109,6 +111,7 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
         imap.oauth1_2lo_login(user_email=user_email)
         imap.select(only_from_trash=True)
         for i, chunk in enumerate(chunk_ids):
+            chunk_size = chunk_sizes[i]
             try:
                 result, data = imap.copy_message(
                     msg_id="%s:%s" % (chunk[0], chunk[-1]),
@@ -117,12 +120,14 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
                 if result == 'OK':
                     counter.load_and_increment_counter(
                         '%s_ok_count' % (user_email),
-                        namespace=str(process_id), delta=chunk_sizes[i])
+                        namespace=str(process_id), delta=chunk_size)
                     moved_successfully.extend(chunk)
+                    number_moved_successfully += chunk_size
                 else:
                     counter.load_and_increment_counter(
                         '%s_error_count' % user_email,
-                        namespace=str(process_id), delta=chunk_sizes[i])
+                        namespace=str(process_id), delta=chunk_size)
+                    number_moved_unsuccessfully += chunk_size
                     logging.error(
                         'Error moving message IDs [%s-%s] for user [%s]: '
                         'Result [%s] data [%s]', chunk[0], chunk[-1],
@@ -132,33 +137,31 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
                     'Failed moving message range IDs [%s-%s] for user [%s]',
                     chunk[0], chunk[-1], user_email)
                 remaining = []
-                for original_chunk in chunk_ids:
+                remaining_chunk_sizes = []
+                number_moved_unsuccessfully += chunk_size
+
+                for j, original_chunk in enumerate(chunk_ids):
                     if original_chunk not in moved_successfully:
                         remaining.append(original_chunk)
+                        remaining_chunk_sizes.append(chunk_sizes[j])
                 # Keep retrying if messages are being moved
                 if retry_count >= 3 and len(moved_successfully) == 0:
                     logging.error('Giving up with remaining [%s] messages for '
-                                  'user [%s]', len(remaining),
+                                  'user [%s]', number_moved_unsuccessfully,
                                   user_email)
                     counter.load_and_increment_counter(
-                        '%s_error_count' % user_email, delta=len(remaining),
+                        '%s_error_count' % user_email, delta=number_moved_unsuccessfully,
                         namespace=str(process_id))
                 else:
                     logging.info(
                         'Scheduling [%s] remaining messages for user [%s]',
-                        len(remaining), user_email)
-                    new_chunk_ids = []
-                    chunk_sizes = []
-                    for chunk in chunkify(remaining,
-                                      chunk_size=constants.MESSAGE_BATCH_SIZE):
-                        new_chunk_ids.append([chunk[0], chunk[-1]])
-                        chunk_sizes.append(len(chunk))
+                        number_moved_unsuccessfully, user_email)
                     deferred.defer(move_messages, user_email=user_email,
                                    tag=tag,
                                    chunk_ids=remaining,
                                    process_id=process_id,
                                    retry_count=retry_count + 1,
-                                   chunk_sizes=chunk_sizes)
+                                   chunk_sizes=remaining_chunk_sizes)
                 break
     except Exception as e:
         logging.exception('Authentication, connection or select problem for '
@@ -169,7 +172,7 @@ def move_messages(user_email=None, tag=None, chunk_ids=list(),
     finally:
         logging.info(
             'Succesfully moved [%s] messages for user [%s] in this task',
-            len(moved_successfully), user_email)
+            number_moved_successfully, user_email)
         if imap:
             imap.close()
 
