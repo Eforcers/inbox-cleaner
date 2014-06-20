@@ -257,6 +257,9 @@ class IMAPHelper:
         if only_from_trash:
             query += 'in:trash '
 
+
+        query += '-filename:*.ics '
+
         query += '%s ' % criteria
         result, data = self.mail_connection.uid('search', None,
                                                 r'(X-GM-RAW "%s")' % query)
