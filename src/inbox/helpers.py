@@ -99,16 +99,9 @@ class DriveHelper(OAuthServiceHelper):
         return None
 
     def insert_file(self, filename=None, mime_type=None, content=None, parent_id=None):
-        custom_property = {
-            'key': 'created_by',
-            'value': 'inbox-cleaner',
-            'visibility': 'PRIVATE'
-        }
-
         body = {
             'title': filename,
-            'mimeType': mime_type,
-            'properties': [custom_property]
+            'mimeType': mime_type
         }
         if parent_id:
             body['parents'] = [{'id': parent_id}]
@@ -360,7 +353,14 @@ class IMAPHelper:
         criteria = "subject:%s %s" % (subject, criteria)
 
         messages = self.list_messages(
-            criteria=criteria, only_from_trash=True)
+            criteria=criteria, only_from_trash=True,
+            only_with_attachments=True)
+
+        if len(messages) > 1:
+            logging.error(
+                "Error deleting msg %s, found %s messages instead of 1",
+                (msg_id, len(messages)))
+            return
 
         for m in messages:
             result, data = self.mail_connection.uid('STORE', m, '+FLAGS', '\\Deleted')

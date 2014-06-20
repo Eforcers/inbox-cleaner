@@ -326,11 +326,12 @@ def clean_message(msg_id='', imap=None, drive=None,
 
     # Then delete previous email
     deferred.defer(delayed_delete_message, msg_id=msg_id,
-                   process_id=process_id, _countdown=15)
+                   process_id=process_id, _countdown=30)
 
     return True
 
-def delayed_delete_message(msg_id=None, process_id=None):
+def delayed_delete_message(msg_id=None, process_id=None,
+                           retries=0):
     process = CleanUserProcess.get_by_id(process_id)
     criteria = process.search_criteria
 
@@ -338,6 +339,15 @@ def delayed_delete_message(msg_id=None, process_id=None):
         CleanMessageProcess.msg_id == msg_id,
         CleanMessageProcess.clean_process_id == process_id)
     ).get()
+
+    if msg_process.status != constants.MIGRATED:
+        if retries < 3:
+            deferred.defer(delayed_delete_message, msg_id=msg_id,
+                       process_id=process_id, retries=retries+1,
+                       _countdown=30*retries)
+        else:
+            logging.error("Couldn't delete msg %s for user %s",
+                (msg_id, process.source_email))
 
     imap = IMAPHelper()
     imap.login(process.source_email, process.source_password)
