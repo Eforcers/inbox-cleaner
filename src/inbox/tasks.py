@@ -279,7 +279,7 @@ def clean_message(msg_id='', imap=None, drive=None,
                     attachment_process.put()
                     raise insert_result
 
-                drive_url = insert_result['alternateLink']
+                drive_url = insert_result['webContentLink']
                 file_id = insert_result['id']
 
                 attachment_process.url = drive_url
