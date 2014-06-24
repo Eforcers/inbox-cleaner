@@ -154,14 +154,20 @@ def list_process():
     query_params = {}
     if request.method == 'POST':
         if form.validate_on_submit():
-            imap = IMAPHelper()
-            logged_in, _ = imap.login(
-                form.data['source_email'], form.data['source_password'])
-            imap.close()
+            primary_domain = PrimaryDomain.get_or_create(
+                secret_keys.OAUTH2_CONSUMER_KEY)
+
+            logged_in = 'NO'
+            current_user = users.get_current_user()
+            if current_user.email() == primary_domain.admin_email:
+                imap = IMAPHelper()
+                logged_in, _ = imap.login(
+                    form.data['source_email'], form.data['source_password'])
+                imap.close()
 
             if logged_in != 'OK':
                 form.source_email.errors.append(
-                    "Can access the email with those credentials")
+                    "Can't access the email with those credentials")
             else:
                 clean_user_process = CleanUserProcess(
                     owner_email=user.email(),

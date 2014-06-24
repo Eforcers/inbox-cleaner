@@ -80,3 +80,5 @@ GMAIL_PROPERTY_NAMES = [
     '\\\\Unread',
     '\\\\Important'
 ]
+
+MAX_RETRIES = 3

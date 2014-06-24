@@ -333,6 +333,15 @@ class IMAPHelper:
         result, data = self.mail_connection.uid('FETCH', msg_id, 'X-GM-LABELS')
         return result, data
 
+    def get_subject(self, msg_id=None):
+        data = self.mail_connection.uid('FETCH',
+            msg_id, '(BODY[HEADER.FIELDS (SUBJECT FROM)])')
+        header_data = data[1][0][1]
+        parser = HeaderParser()
+        header = parser.parsestr(header_data)
+        subject = header['Subject']
+        return subject
+
     def delete_message(self, msg_id=None, criteria='', mailbox_is_trash=False):
         data = self.mail_connection.uid('FETCH',
             msg_id, '(BODY[HEADER.FIELDS (SUBJECT FROM)])')
@@ -416,6 +425,6 @@ class MigrationHelper(OAuthServiceHelper):
 
             return True
         except Exception as e:
-            logging.error("Error migration email for user %s, error: %s" % (
-                user_email, e))
+            logging.error("Error migrating email %s for user %s, error: %s" % (
+                msg, user_email, e))
             return e

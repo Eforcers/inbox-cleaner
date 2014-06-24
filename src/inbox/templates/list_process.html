@@ -12,9 +12,9 @@
     <div class="row">
         
         <div style="margin-top:60px" class="col-md-12">
-        <h1 id="processes-list">Processes List</h1>
+        <h1 id="processes-list" style="font-size: 22px;font-weight: bold">Processes List</h1>
         <div>&nbsp;</div>
-        <table class="table table-bordered table-striped" id="process-list">
+        <table class="table table-bordered table-striped center-block" id="process-list">
             <thead>
                 <tr>
                     <th>Name</th>
@@ -22,6 +22,8 @@
                     <th>Destination message email</th>
                     <th>Search criteria</th>
                     <th>Status</th>
+                    <th>Number of Processed Messages</th>
+                    <th>Total Number of Messages</th>
                 </tr>
             </thead>
             <tbody>
@@ -32,6 +34,8 @@
                     <td>{{ clean_process.destination_message_email }}</td>
                     <td>{{ clean_process.search_criteria }}</td>
                     <td>{{ clean_process.status }}</td>
+                    <td>{{ clean_process.progress if clean_process.progress else '' }}</td>
+                    <td>{{ clean_process.number_of_messages if clean_process.number_of_messages else '' }}</td>
                 </tr>
                 {% else %}
                 <tr><td colspan="7">No processes yet</td></tr>

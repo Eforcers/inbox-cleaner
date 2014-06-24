@@ -86,7 +86,10 @@ def get_messages_for_cleaning(user_email=None, process_id=None):
             'cleaning_%s_total_count' % user_email,
             delta=len(msg_ids),
             namespace=str(process_id))
+        # chunkify: due to the migration API 1QPS limit
+        # should this optimization be used?
         return [msg_ids[i::n] for i in xrange(n)]
+        # return [msg_ids]
     else:
         counter.load_and_increment_counter(
             'cleaning_%s_total_count' % user_email,
@@ -231,8 +234,9 @@ def clean_message(msg_id='', imap=None, drive=None,
         raise Exception("Couldn't read message")
 
     result, label_data = imap.get_message_labels(msg_id=msg_id)
-
-    labels = (((label_data[0].split('('))[2].split(')'))[0]).split()
+    labels = []
+    if label_data and label_data[0]:
+        labels = (((label_data[0].split('('))[2].split(')'))[0]).split()
     mail = email.message_from_string(message[0][1])
     attachments = []
     number_of_attachments = 0
@@ -341,17 +345,43 @@ def delayed_delete_message(msg_id=None, process_id=None,
     ).get()
 
     if msg_process.status != constants.MIGRATED:
-        if retries < 3:
+        if retries < constants.MAX_RETRIES:
             deferred.defer(delayed_delete_message, msg_id=msg_id,
                        process_id=process_id, retries=retries+1,
-                       _countdown=30*retries)
+                       _countdown=60*2**retries)
         else:
             logging.error("Couldn't delete msg %s for user %s",
                 (msg_id, process.source_email))
+        return
 
     imap = IMAPHelper()
     imap.login(process.source_email, process.source_password)
     imap.select()
+
+    # Look for the migrated email, if it doesn't exist yet
+    # retry later
+    try:
+        subject = imap.get_subject(msg_id=msg_id)
+    except Exception as e:
+        if retries < constants.MAX_RETRIES:
+            deferred.defer(delayed_delete_message, msg_id=msg_id,
+                       process_id=process_id, retries=retries+1,
+                       _countdown=60*2**retries)
+        else:
+            logging.error("Couldn't delete msg %s for user %s, error %s",
+                (msg_id, process.source_email, e.message))
+        return
+    messages = imap.list_messages(criteria="subject:(%s)" % subject)
+
+    if len(messages) < 2:
+        if retries < constants.MAX_RETRIES:
+            deferred.defer(delayed_delete_message, msg_id=msg_id,
+                       process_id=process_id, retries=retries+1,
+                       _countdown=60*2**retries)
+        else:
+            logging.error("Couldn't delete msg %s for user %s" %
+                (msg_id, process.source_email))
+        return
 
     delete_result = imap.delete_message(msg_id=msg_id, criteria=criteria)
     imap.close()
@@ -369,13 +399,17 @@ def delayed_delete_message(msg_id=None, process_id=None,
         CleanMessageProcess.clean_process_id == process_id
     ).fetch()
 
+    progress = 0
     for message in all_cleaning_messages:
         if not message.status == constants.FINISHED:
             all_done = False
+        else:
+            progress += 1
 
     if all_done:
         process.status = constants.FINISHED
-        process.put()
+    process.progress = progress
+    process.put()
 
 def clean_messages(user_email=None, password=None, chunk_ids=list(),
                    retry_count=0, process_id=None):
@@ -394,6 +428,7 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(),
 
         primary_domain = PrimaryDomain.get_or_create(
                 secret_keys.OAUTH2_CONSUMER_KEY)
+
         try:
             drive = DriveHelper(credentials_json=primary_domain.credentials,
                                 admin_email=primary_domain.admin_email,
@@ -447,7 +482,7 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(),
                 for original_chunk in chunk_ids:
                     if original_chunk not in cleaned_successfully:
                         remaining.append(original_chunk)
-                if retry_count < 3:
+                if retry_count < constants.MAX_RETRIES:
                     logging.info(
                         'Scheduling [%s] remaining cleaning messages for user [%s]',
                         len(remaining), user_email)
@@ -477,6 +512,14 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(),
 def schedule_user_cleaning(user_email=None, process_id=None):
     all_messages = get_messages_for_cleaning(
         user_email=user_email, process_id=process_id)
+
+    number_of_messages = 0
+    for chunk in all_messages:
+        number_of_messages += len(chunk)
+
+    process = CleanUserProcess.get_by_id(process_id)
+    process.number_of_messages = number_of_messages
+    process.put()
 
     for chunk_ids in all_messages:
         if len(chunk_ids) > 0:

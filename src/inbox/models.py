@@ -64,6 +64,8 @@ class CleanUserProcess(ndb.Model):
     pipeline_id = ndb.IntegerProperty(indexed=False)
     status = ndb.StringProperty()
     created = ndb.DateTimeProperty(auto_now_add=True)
+    progress = ndb.IntegerProperty(indexed=False)
+    number_of_messages = ndb.IntegerProperty(indexed=False)
 
 
 class CleanMessageProcess(ndb.Model):
