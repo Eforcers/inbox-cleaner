@@ -88,8 +88,8 @@ def get_messages_for_cleaning(user_email=None, process_id=None):
             namespace=str(process_id))
         # chunkify: due to the migration API 1QPS limit
         # should this optimization be used?
-        return [msg_ids[i::n] for i in xrange(n)]
-        # return [msg_ids]
+        # return [msg_ids[i::n] for i in xrange(n)]
+        return [msg_ids]
     else:
         counter.load_and_increment_counter(
             'cleaning_%s_total_count' % user_email,

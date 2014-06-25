@@ -17,6 +17,12 @@ indexes:
 
 - kind: CleanUserProcess
   properties:
+  - name: owner_email
+  - name: created
+    direction: desc
+
+- kind: CleanUserProcess
+  properties:
   - name: process_name
   - name: __key__
     direction: desc

@@ -135,8 +135,8 @@ def oauth_callback():
 @app.route('/admin/settings/')
 @login_required
 def settings():
-    # domain_name = users.get_current_user().email().split('@')[1]
-    domain_name = secret_keys.OAUTH2_CONSUMER_KEY
+    domain_name = users.get_current_user().email().split('@')[1]
+    # domain_name = secret_keys.OAUTH2_CONSUMER_KEY
     return render_template(
         'oauth/index.html', domain_name=domain_name
     )
@@ -150,12 +150,12 @@ def list_process():
     clean_process_saved = False
 
     clean_processes = []
-    clean_process_query = CleanUserProcess.query().order()
+    clean_process_query = CleanUserProcess.query(CleanUserProcess.owner_email == user.email()).order()
     query_params = {}
     if request.method == 'POST':
         if form.validate_on_submit():
             primary_domain = PrimaryDomain.get_or_create(
-                secret_keys.OAUTH2_CONSUMER_KEY)
+                domain_name = user.email().split('@')[1])
 
             logged_in = 'NO'
             current_user = users.get_current_user()

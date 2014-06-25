@@ -367,7 +367,7 @@ class IMAPHelper:
 
         if len(messages) > 1:
             logging.error(
-                "Error deleting msg %s, found %s messages instead of 1",
+                "Error deleting msg %s, found %s messages instead of 1" %
                 (msg_id, len(messages)))
             return
 
