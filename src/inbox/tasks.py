@@ -13,6 +13,7 @@ from models import ProcessedUser, MoveProcess, CleanUserProcess, \
 from util import chunkify
 from livecount import counter
 from google.appengine.ext import ndb
+import time
 
 
 def get_messages(user_email=None, tag=None, process_id=None):
@@ -221,6 +222,7 @@ def schedule_user_move(user_email=None, tag=None, move_process_key=None,
 def clean_message(msg_id='', imap=None, drive=None,
                   migration=None, folder_id=None,
                   user_email=None, process_id=None):
+    logging.info("Trying to clean message %s for user %s" % (msg_id, user_email))
     process = CleanUserProcess.get_by_id(process_id)
     criteria = process.search_criteria
 
@@ -271,17 +273,20 @@ def clean_message(msg_id='', imap=None, drive=None,
                 attachment = part.get_payload(decode=True)
                 mime_type = part.get_content_type()
                 filename = part.get_filename()
+                text, encoding = email.Header.decode_header(filename)[0]
+                if encoding:
+                    filename = text.decode(encoding)
 
                 insert_result = drive.insert_file(filename=filename,
                                                   mime_type=mime_type,
                                                   content=attachment,
                                                   parent_id=folder_id)
-                if type(insert_result) is Exception:
+                if not insert_result:
                     attachment_process.error_description = (
-                        insert_result.message
+                        "Error inserting file"
                     )
                     attachment_process.put()
-                    raise insert_result
+                    raise Exception("Insert file error")
 
                 drive_url = insert_result['webContentLink']
                 file_id = insert_result['id']
@@ -298,12 +303,12 @@ def clean_message(msg_id='', imap=None, drive=None,
                                                  value=user_email,
                                                  type='user', role='writer')
 
-            if type(permission_result) is Exception:
+            if not permission_result:
                 attachment_process.error_description = (
-                    permission_result.message
+                    "Permission error"
                 )
                 attachment_process.put()
-                raise permission_result
+                raise Exception("Permission error")
 
             part.set_payload("")
             for header in part.keys():
@@ -314,25 +319,27 @@ def clean_message(msg_id='', imap=None, drive=None,
 
     for url, filename in attachments:
         body_suffix = '<a href="%s">%s</a>' % (url, filename)
-        new_payload = email.MIMEText.MIMEText(body_suffix, 'html')
+        new_payload = email.MIMEText.MIMEText(body_suffix.encode('utf-8'), 'html', 'utf-8')
         mail.attach(new_payload)
 
     # Send new mail
+    time.sleep(1.2)
     migration_result = migration.migrate_mail(user_email=user_email, msg=mail,
                                     labels=labels)
-    if type(migration_result) is Exception:
-        msg_process.error_description = migration_result.message
+    if not migration_result:
+        msg_process.error_description = "Migration error"
         msg_process.put()
-        raise migration_result
+        raise Exception("Migration error")
     else:
         msg_process.status = constants.MIGRATED
         msg_process.put()
 
-    # Then delete previous email
-    deferred.defer(delayed_delete_message, msg_id=msg_id,
-                   process_id=process_id, _countdown=30)
+        # Then delete previous email
+        logging.info("Delaying delete of msg %s for user %s" % (msg_id, user_email))
+        deferred.defer(delayed_delete_message, msg_id=msg_id,
+                       process_id=process_id, _countdown=30, _queue="elimination")
 
-    return True
+        return True
 
 def delayed_delete_message(msg_id=None, process_id=None,
                            retries=0):
@@ -348,7 +355,7 @@ def delayed_delete_message(msg_id=None, process_id=None,
         if retries < constants.MAX_RETRIES:
             deferred.defer(delayed_delete_message, msg_id=msg_id,
                        process_id=process_id, retries=retries+1,
-                       _countdown=60*2**retries)
+                       _countdown=60*2**retries, _queue="elimination")
         else:
             logging.error("Couldn't delete msg %s for user %s",
                 (msg_id, process.source_email))
@@ -377,21 +384,17 @@ def delayed_delete_message(msg_id=None, process_id=None,
         if retries < constants.MAX_RETRIES:
             deferred.defer(delayed_delete_message, msg_id=msg_id,
                        process_id=process_id, retries=retries+1,
-                       _countdown=60*2**retries)
+                       _countdown=60*2**retries, _queue="elimination")
         else:
             logging.error("Couldn't delete msg %s for user %s" %
                 (msg_id, process.source_email))
         return
 
-    delete_result = imap.delete_message(msg_id=msg_id, criteria=criteria)
+    imap.delete_message(msg_id=msg_id, criteria=criteria)
     imap.close()
 
-    if type(delete_result) is Exception:
-        msg_process.error_description = delete_result.message
-        msg_process.put()
-    else:
-        msg_process.status = constants.FINISHED
-        msg_process.put()
+    msg_process.status = constants.FINISHED
+    msg_process.put()
 
     all_done = True
 
@@ -414,6 +417,7 @@ def delayed_delete_message(msg_id=None, process_id=None,
 def clean_messages(user_email=None, password=None, chunk_ids=list(),
                    retry_count=0, process_id=None):
     cleaned_successfully = []
+    remaining = []
     if len(chunk_ids) <= 0:
         process = CleanUserProcess.get_by_id(process_id)
         process.status = constants.FINISHED
@@ -479,10 +483,10 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(),
                     'Failed cleaning individual message ID [%s] for user [%s]',
                     message_id, user_email)
                 remaining = []
-                for original_chunk in chunk_ids:
-                    if original_chunk not in cleaned_successfully:
-                        remaining.append(original_chunk)
-                if retry_count < constants.MAX_RETRIES:
+                if retry_count < constants.MAX_CLEAN_RETRIES:
+                    for chunk_msg in chunk_ids:
+                        if chunk_msg not in cleaned_successfully:
+                            remaining.append(chunk_msg)
                     logging.info(
                         'Scheduling [%s] remaining cleaning messages for user [%s]',
                         len(remaining), user_email)
@@ -491,14 +495,22 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(),
                                    process_id=process_id,
                                    retry_count=retry_count + 1)
                 else:
+                    for chunk_msg in chunk_ids:
+                        if message_id == chunk_msg:
+                            continue
+                        if chunk_msg not in cleaned_successfully:
+                            remaining.append(chunk_msg)
                     logging.info(
-                        'Giving up with cleaning remaining [%s] messages for '
-                        'user [%s]', len(remaining),
+                        'Giving up cleaning message [%s] for '
+                        'user [%s]', message_id,
                         user_email)
                     counter.load_and_increment_counter(
                         'cleaning_%s_error_count' % user_email,
-                        delta=len(remaining),
+                        delta=1,
                         namespace=str(process_id))
+                    deferred.defer(clean_messages, user_email=user_email,
+                                   chunk_ids=remaining,
+                                   process_id=process_id)
                 break
 
     except Exception as e:
@@ -507,6 +519,9 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(),
     finally:
         if imap:
             imap.close()
+        if len(remaining) == 0:
+            process.status = constants.FINISHED
+            process.put()
 
 
 def schedule_user_cleaning(user_email=None, process_id=None):

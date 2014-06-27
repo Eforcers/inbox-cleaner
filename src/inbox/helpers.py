@@ -111,7 +111,7 @@ class DriveHelper(OAuthServiceHelper):
             return created_file
         except Exception as e:
             logging.error("Error uploading file %s" % filename)
-            return e
+            return False
 
     def get_metadata(self, title=None, parent_id=None):
         try:
@@ -142,7 +142,7 @@ class DriveHelper(OAuthServiceHelper):
         except Exception as e:
             logging.error('Error inserting permission for file: %s, error: %s' % (
                 file_id, e))
-            return e
+            return False
 
 class DirectoryHelper(OAuthServiceHelper):
     """ Google Directory API helper class"""
@@ -243,19 +243,19 @@ class IMAPHelper:
     def list_messages(self, criteria='', only_with_attachments=False,
                       only_from_trash=False):
         self.select(only_from_trash=only_from_trash)
-        query = '-in:draft '
+        query = u'-in:draft '
         if only_with_attachments:
-            query += 'has:attachment '
+            query += 'has:attachment smaller:9M '
 
         if only_from_trash:
             query += 'in:trash '
 
-
         query += '-filename:*.ics '
 
         query += '%s ' % criteria
-        result, data = self.mail_connection.uid('search', None,
-                                                r'(X-GM-RAW "%s")' % query)
+        logging.info("query %s", query)
+        self.mail_connection.literal = query.encode('utf-8')
+        result, data = self.mail_connection.uid('SEARCH', 'CHARSET', 'UTF-8', 'X-GM-RAW')
 
         msg_ids = []
         if result == 'OK':
@@ -340,15 +340,14 @@ class IMAPHelper:
         parser = HeaderParser()
         header = parser.parsestr(header_data)
         subject = header['Subject']
-        return subject
+        text, encoding = email.Header.decode_header(subject)[0]
+        if encoding is None:
+            return text
+        else:
+            return text.decode(encoding)
 
     def delete_message(self, msg_id=None, criteria='', mailbox_is_trash=False):
-        data = self.mail_connection.uid('FETCH',
-            msg_id, '(BODY[HEADER.FIELDS (SUBJECT FROM)])')
-        header_data = data[1][0][1]
-        parser = HeaderParser()
-        header = parser.parsestr(header_data)
-        subject = header['Subject']
+        subject = self.get_subject(msg_id=msg_id)
 
         self.mail_connection.uid('COPY', msg_id,
                                  self.all_labels[constants.GMAIL_TRASH_KEY])
@@ -361,15 +360,16 @@ class IMAPHelper:
 
         criteria = "subject:%s %s" % (subject, criteria)
 
-        messages = self.list_messages(
-            criteria=criteria, only_from_trash=True,
-            only_with_attachments=True)
-
-        if len(messages) > 1:
-            logging.error(
-                "Error deleting msg %s, found %s messages instead of 1" %
-                (msg_id, len(messages)))
-            return
+        try:
+            messages = self.list_messages(
+                criteria="subject:%s %s" % (subject, criteria),
+                only_from_trash=True,
+                only_with_attachments=True)
+        except:
+            messages = self.list_messages(
+                criteria=criteria,
+                only_from_trash=True,
+                only_with_attachments=True)
 
         for m in messages:
             result, data = self.mail_connection.uid('STORE', m, '+FLAGS', '\\Deleted')
@@ -425,6 +425,6 @@ class MigrationHelper(OAuthServiceHelper):
 
             return True
         except Exception as e:
-            logging.error("Error migrating email %s for user %s, error: %s" % (
-                msg, user_email, e))
-            return e
+            logging.error("Error migrating email for user %s, error: %s" % (
+                user_email, e))
+            return False
