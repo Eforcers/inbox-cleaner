@@ -241,9 +241,13 @@ class IMAPHelper:
             logging.exception('Error closing the connection')
 
     def list_messages(self, criteria='', only_with_attachments=False,
-                      only_from_trash=False):
+                      only_from_trash=False, not_migrated=False):
         self.select(only_from_trash=only_from_trash)
         query = u'-in:draft '
+
+        if not_migrated:
+            query += '-label:Migrated-Migrados '
+
         if only_with_attachments:
             query += 'has:attachment smaller:9M '
 

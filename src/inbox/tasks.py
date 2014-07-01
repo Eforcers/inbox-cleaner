@@ -75,7 +75,7 @@ def get_messages_for_cleaning(user_email=None, process_id=None):
     imap = IMAPHelper()
     imap.login(email=user_email, password=clean_process.source_password)
     msg_ids = imap.list_messages(criteria=clean_process.search_criteria,
-                                 only_with_attachments=True)
+                                 only_with_attachments=True, not_migrated=True)
     imap.close()
 
     if len(msg_ids) > 0:
