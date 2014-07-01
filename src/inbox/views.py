@@ -88,8 +88,13 @@ def admin_index():
 @app.route('/oauth/start/<string:domain>', methods=['GET'])
 @login_required
 def start_oauth2_dance(domain):
-    user_email = users.get_current_user().email()
+    current_user = users.get_current_user()
+    user_email = current_user.email()
     login_hint = user_email
+    user_domain = current_user.email().split('@')[1]
+
+    if user_domain != domain:
+        domain = user_domain
 
     primary_domain = PrimaryDomain.get_or_create(domain)
     approval_prompt = 'auto' if primary_domain.refresh_token else 'force'
