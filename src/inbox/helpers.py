@@ -379,7 +379,7 @@ class IMAPHelper:
 
 
 class MigrationHelper(OAuthServiceHelper):
-    """ Google Directory API helper class"""
+    """ Google Migration API helper class"""
 
     def __init__(self, credentials_json=None, refresh_token=None):
         OAuthServiceHelper.__init__(self, credentials_json, refresh_token)
@@ -389,7 +389,7 @@ class MigrationHelper(OAuthServiceHelper):
         if labels is None or type(labels) is not list:
             labels = []
         new_labels = []
-        user_labels = []
+        user_labels = [constants.CLEAN_LABEL]
 
         properties = constants.GMAIL_PROPERTY_NAMES
 

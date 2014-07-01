@@ -378,9 +378,10 @@ def delayed_delete_message(msg_id=None, process_id=None,
             logging.error("Couldn't delete msg %s for user %s, error %s",
                 (msg_id, process.source_email, e.message))
         return
-    messages = imap.list_messages(criteria="subject:(%s)" % subject)
 
-    if len(messages) < 2:
+    messages = imap.list_messages(criteria="subject:(%s) label:Migrated-Migrados" % subject)
+
+    if len(messages) < 1:
         if retries < constants.MAX_RETRIES:
             deferred.defer(delayed_delete_message, msg_id=msg_id,
                        process_id=process_id, retries=retries+1,
@@ -430,8 +431,9 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(),
         imap.login(email=user_email, password=process.source_password)
         imap.select()
 
+        domain_name = user_email.split('@')[1]
         primary_domain = PrimaryDomain.get_or_create(
-                secret_keys.OAUTH2_CONSUMER_KEY)
+                domain_name)
 
         try:
             drive = DriveHelper(credentials_json=primary_domain.credentials,
