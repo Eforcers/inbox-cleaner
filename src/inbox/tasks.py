@@ -357,7 +357,7 @@ def delayed_delete_message(msg_id=None, process_id=None,
                        process_id=process_id, retries=retries+1,
                        _countdown=60*2**retries, _queue="elimination")
         else:
-            logging.error("Couldn't delete msg %s for user %s",
+            logging.error("Couldn't delete msg %s for user %s" %
                 (msg_id, process.source_email))
         return
 
@@ -375,7 +375,7 @@ def delayed_delete_message(msg_id=None, process_id=None,
                        process_id=process_id, retries=retries+1,
                        _countdown=60*2**retries)
         else:
-            logging.error("Couldn't delete msg %s for user %s, error %s",
+            logging.error("Couldn't delete msg %s for user %s, error %s" %
                 (msg_id, process.source_email, e.message))
         return
 
