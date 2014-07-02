@@ -521,7 +521,7 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(),
     finally:
         if imap:
             imap.close()
-        if len(remaining) == 0:
+        if len(chunk_ids) == 0:
             process.status = constants.FINISHED
             process.put()
 

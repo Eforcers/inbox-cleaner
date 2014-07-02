@@ -26,3 +26,8 @@ indexes:
   - name: process_name
   - name: __key__
     direction: desc
+
+- kind: Project
+  properties:
+  - name: current_state
+  - name: code
