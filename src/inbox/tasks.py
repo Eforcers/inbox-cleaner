@@ -416,7 +416,7 @@ def delayed_delete_message(msg_id=None, process_id=None,
     process.put()
 
 def clean_messages(user_email=None, password=None, chunk_ids=list(),
-                   retry_count=0, process_id=None):
+                   retry_count=0, process_id=None, global_retry_count=0):
     cleaned_successfully = []
     remaining = []
     if len(chunk_ids) <= 0:
@@ -516,12 +516,23 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(),
                 break
 
     except Exception as e:
-        logging.exception('Failed cleaning messages chunk')
-        raise e
+        logging.exception(
+            'Failed cleaning messages chunk with length of: %s' % len(chunk_ids))
+
+        if global_retry_count < 3:
+            deferred.defer(clean_messages, user_email=user_email,
+                           chunk_ids=chunk_ids,
+                           process_id=process_id,
+                           global_retry_count=global_retry_count+1,
+                           _countdown=5)
+        else:
+            process.status = constants.FINISHED
+            process.put()
     finally:
         if imap:
             imap.close()
-        if len(chunk_ids) == 0:
+        # This is the last message or all
+        if len(chunk_ids) == 1 or len(cleaned_successfully) == len(chunk_ids):
             process.status = constants.FINISHED
             process.put()
 
