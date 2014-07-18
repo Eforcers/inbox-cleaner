@@ -66,6 +66,7 @@ class CleanUserProcess(ndb.Model):
     created = ndb.DateTimeProperty(auto_now_add=True)
     progress = ndb.IntegerProperty(indexed=False)
     number_of_messages = ndb.IntegerProperty(indexed=False)
+    latest_activity = ndb.StringProperty(indexed=False)
 
 
 class CleanMessageProcess(ndb.Model):

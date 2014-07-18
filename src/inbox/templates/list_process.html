@@ -17,16 +17,17 @@
         <table class="table table-bordered table-striped center-block" id="process-list">
             <thead>
                 <tr>
-                    <th>Name</th>
+                    <th>Nombre</th>
                     <th>Source email</th>
                     <th>Destination message email</th>
                     <th>Search criteria</th>
                     <th>Status</th>
+                    <th>Latest Activity</th>
                     <th>Number of Processed Messages</th>
                     <th>Total Number of Messages</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody style="font-size: 15px;">
                 {% for clean_process in clean_processes %}
                 <tr>
                     <td>{{ clean_process.process_name }}</td>
@@ -34,11 +35,12 @@
                     <td>{{ clean_process.destination_message_email }}</td>
                     <td>{{ clean_process.search_criteria }}</td>
                     <td>{{ clean_process.status }}</td>
+                    <td>{{ clean_process.latest_activity }}</td>
                     <td>{{ clean_process.progress if clean_process.progress else '' }}</td>
                     <td>{{ clean_process.number_of_messages if clean_process.number_of_messages else '' }}</td>
                 </tr>
                 {% else %}
-                <tr><td colspan="7">No processes yet</td></tr>
+                <tr><td colspan="8">No processes yet</td></tr>
                 {% endfor %}
             </tbody>
         </table>

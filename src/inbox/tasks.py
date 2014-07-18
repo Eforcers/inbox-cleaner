@@ -14,6 +14,8 @@ from util import chunkify
 from livecount import counter
 from google.appengine.ext import ndb
 import time
+import pytz
+import datetime
 
 
 def get_messages(user_email=None, tag=None, process_id=None):
@@ -412,11 +414,17 @@ def delayed_delete_message(msg_id=None, process_id=None,
 
     if all_done:
         process.status = constants.FINISHED
+
+    utc_now = datetime.datetime.utcnow()
+    local_tz = pytz.timezone('America/Bogota')
+    tz_offset = local_tz.utcoffset(utc_now)
+    now = utc_now + tz_offset
     process.progress = progress
+    process.latest_activity = "%s" % now
     process.put()
 
 def clean_messages(user_email=None, password=None, chunk_ids=list(),
-                   retry_count=0, process_id=None, global_retry_count=0):
+                   retry_count=0, process_id=None):
     cleaned_successfully = []
     remaining = []
     if len(chunk_ids) <= 0:
@@ -516,23 +524,12 @@ def clean_messages(user_email=None, password=None, chunk_ids=list(),
                 break
 
     except Exception as e:
-        logging.exception(
-            'Failed cleaning messages chunk with length of: %s' % len(chunk_ids))
-
-        if global_retry_count < 3:
-            deferred.defer(clean_messages, user_email=user_email,
-                           chunk_ids=chunk_ids,
-                           process_id=process_id,
-                           global_retry_count=global_retry_count+1,
-                           _countdown=5)
-        else:
-            process.status = constants.FINISHED
-            process.put()
+        logging.exception('Failed cleaning messages chunk')
+        raise e
     finally:
         if imap:
             imap.close()
-        # This is the last message or all
-        if len(chunk_ids) == 1 or len(cleaned_successfully) == len(chunk_ids):
+        if len(chunk_ids) == 0:
             process.status = constants.FINISHED
             process.put()
 
