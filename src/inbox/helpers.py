@@ -13,13 +13,14 @@ from apiclient.http import MediaIoBaseUpload
 
 from util import OAuthEntity, GenerateXOauthString
 from apiclient.discovery import build
-from oauth2client.client import Credentials, OAuth2WebServerFlow
+from oauth2client.client import Credentials, OAuth2WebServerFlow, SignedJwtAssertionCredentials
 from gdata.apps.emailsettings.client import EmailSettingsClient
 from gdata.gauth import OAuth2TokenFromCredentials
 from inbox import app
 import constants
 from email.parser import HeaderParser
 import time
+import base64
 
 
 class OAuthDanceHelper:
@@ -432,3 +433,111 @@ class MigrationHelper(OAuthServiceHelper):
             logging.error("Error migrating email for user %s, error: %s" % (
                 user_email, e))
             return False
+
+class GmailHelper():
+    """ Google Gmail API with service account helper class"""
+    def __init__(self):
+        f = file(constants.SERVICE_ACCOUNT_KEY_PATH, 'rb')
+        key = f.read()
+        f.close()
+
+        credentials = SignedJwtAssertionCredentials(
+            constants.SERVICE_ACCOUNT_ID,
+            key,
+            scope=constants.GMAIL_API_SCOPES)
+        http = httplib2.Http()
+        http = credentials.authorize(http)
+
+        self.service = build("gmail", "v1", http=self.http)
+
+    def get_attachments(self, user_id, msg_id):
+        attachments = []
+        try:
+            message = self.service.user().messages().get(
+                userId=user_id, id=msg_id).execute()
+
+            for part in message['payload']['parts']:
+                if part['filename']:
+                    file_data = base64.urlsafe_b64decode(
+                        part['body']['data'].encode('UTF-8'))
+                    attachments.append(file_data)
+            return attachments
+
+        except errors.HttpError, e:
+            logging.error("Error retrieving attachments for user %s and msg %s, error: %s" %
+                          (user_id, msg_id, e))
+            return None
+
+    def get_message(self, user_id, msg_id):
+        try:
+            message = self.service.users().messages().get(
+                userId=user_id, id=msg_id).execute()
+            return message
+
+        except errors.HttpError, e:
+            logging.error("Error retrieving message for user %s and msg %s, error: %s" %
+                          (user_id, msg_id, e))
+            return None
+
+    def list_msgs_ids_by_query(self, user_id, query=''):
+        messages = []
+        try:
+            response = self.service.users().messages().list(
+                userId=user_id, q=query).execute()
+
+            if 'messages' in response:
+                messages.extend(response['messages'])
+
+            while 'nextPageToken' in response:
+                page_token = response['nextPageToken']
+                response = self.service.users().messages().list(
+                    userId=user_id, q=query, pageToken=page_token).execute()
+                messages.extend(response['messages'])
+
+            return messages
+        except errors.HttpError, e:
+            logging.error("Error retrieving message list for user %s and query %s, error: %s" %
+                          (user_id, query, e))
+            return None
+
+    def trash_msg(self, user_id, msg_id):
+        try:
+            response = self.service.users().messages().trash(
+                userId=user_id, id=msg_id).execute()
+            return True
+        except Exception as e:
+            logging.error("Error trashing message for user %s and msg_id %s, error: %s" %
+                          (user_id, msg_id, e))
+            return None
+
+    def delete_msg(self, user_id, msg_id):
+        try:
+            response = self.service.users().messages().delete(
+                userId=user_id, id=msg_id).execute()
+            return True
+        except Exception as e:
+            logging.error("Error deleting message for user %s and msg_id %s, error: %s" %
+                          (user_id, msg_id, e))
+            return None
+
+    def insert_msg(self, user_id, message):
+        try:
+            message = self.service.users().messages().insert(
+                userId=user_id, body=message).execute()
+            logging.info("Inserted message with id: %s" % message['id'])
+            return message
+        except errors.HttpError, e:
+            logging.error("Error inserting message for user %s and msg %s, error: %s" %
+                          (user_id, message, e))
+
+    def add_labels(self, user_id, msg_id, labels):
+        try:
+            message = self.service.users().messages().modify(
+                userId=user_id, id=msg_id, body=labels).execute()
+            label_ids = message['labelIds']
+            logging.info("Added labels %s to message %s and user %s" %
+                         (labels, label_ids, user_id))
+            return message
+        except errors.HttpError, e:
+            logging.error("Error adding labels for user %s and msg %s, error: %s" %
+                          (user_id, msg_id, e))
